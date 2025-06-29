@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Systems</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText,
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state #feedbackText .prompt-guidance {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+        }
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-emerald-200 via-teal-200 to-cyan-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-teal-700">Welcome, Science Explorer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on Systems.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-teal-500 focus:border-teal-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6 text-lg">Start Exploring!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-teal-700 mb-2">PSLE Science: Systems</h1>
+            <p class="text-slate-600 mb-8">Choose a system to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-teal-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-teal-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <p id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></p>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-teal-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-teal-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-teal-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleGrammarFlashcardAppUserName_v6'; // New version key for new topic
+    // This is the link to YOUR Google Apps Script. It's already set.
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Systems ---
+    const allFlashcardSets = {
+        "Set 1: Plant Systems": [
+            { id: 'p1q1', question: "What is the primary function of the roots of a plant?", options: ["To make food", "To absorb water and minerals", "To carry out reproduction"], correctAnswer: "To absorb water and minerals", image: null },
+            { id: 'p1q2', "question": "Which substance is NOT required for photosynthesis?", "options": ["Carbon dioxide", "Oxygen", "Sunlight"], "correctAnswer": "Oxygen", "image": null },
+            { id: 'p1q3', "question": "Which part of the plant transports water from the roots to the leaves?", "options": ["Phloem", "Stomata", "Xylem"], "correctAnswer": "Xylem", "image": null },
+            { id: 'p1q4', "question": "Which part of the plant transports manufactured food from the leaves to other parts?", "options": ["Xylem", "Phloem", "Root hairs"], "correctAnswer": "Phloem", "image": null },
+            { id: 'p1q5', "question": "What is the process where plants release water vapour through tiny pores on their leaves?", "options": ["Photosynthesis", "Respiration", "Transpiration"], "correctAnswer": "Transpiration", "image": null },
+            { id: 'p1q6', "question": "In plant reproduction, where must the pollen grain land for pollination to occur?", "options": ["Anther", "Stigma", "Ovary"], "correctAnswer": "Stigma", "image": null },
+            { id: 'p1q7', "question": "What is the main purpose of a flower's colourful petals?", "options": ["To absorb sunlight", "To attract pollinators", "To protect the seeds"], "correctAnswer": "To attract pollinators", "image": null },
+            { id: 'p1q8', "question": "After fertilisation in a flowering plant, what does the ovule develop into?", "options": ["A fruit", "A seed", "A new leaf"], "correctAnswer": "A seed", "image": null },
+            { id: 'p1q9', "question": "After fertilisation in a flowering plant, what does the ovary develop into?", "options": ["A fruit", "A seed", "A stem"], "correctAnswer": "A fruit", "image": null },
+            { id: 'p1q10', "question": "Plants carry out respiration to release energy from food. When does this process occur?", "options": ["Only during the day", "Only at night", "All the time (day and night)"], "correctAnswer": "All the time (day and night)", "image": null },
+            { id: 'p1q11', "question": "Which gas do plants take in from the atmosphere for photosynthesis?", "options": ["Oxygen", "Nitrogen", "Carbon dioxide"], "correctAnswer": "Carbon dioxide", "image": null },
+            { id: 'p1q12', "question": "Which gas is released as a waste product during photosynthesis?", "options": ["Oxygen", "Nitrogen", "Carbon dioxide"], "correctAnswer": "Oxygen", "image": null },
+            { id: 'p1q13', "question": "What is the green pigment in leaves that traps sunlight called?", "options": ["Xylem", "Chlorophyll", "Stomata"], "correctAnswer": "Chlorophyll", "image": null },
+            { id: 'p1q14', "question": "The tiny pores on the underside of a leaf that allow for gas exchange are called...", "options": ["Root hairs", "Stomata", "Anthers"], "correctAnswer": "Stomata", "image": null },
+            { id: 'p1q15', "question": "Which of these is a function of the stem?", "options": ["To absorb water", "To hold the plant upright towards sunlight", "To make food for the plant"], "correctAnswer": "To hold the plant upright towards sunlight", "image": null },
+            { id: 'p1q16', "question": "Dispersal of seeds is important to...", "options": ["ensure all seeds grow in one place.", "reduce overcrowding and competition for resources.", "make the seeds grow faster."], "correctAnswer": "reduce overcrowding and competition for resources.", "image": null },
+            { id: 'p1q17', "question": "Which part of the flower produces pollen grains?", "options": ["Stigma", "Ovary", "Anther"], "correctAnswer": "Anther", "image": null },
+            { id: 'p1q18', "question": "In a celery stalk experiment with coloured water, which part becomes coloured?", "options": ["The food-carrying tubes (phloem)", "The water-carrying tubes (xylem)", "The entire stalk evenly"], "correctAnswer": "The water-carrying tubes (xylem)", "image": null },
+            { id: 'p1q19', "question": "A plant is placed in a dark cupboard for two days. What will happen to the amount of starch in its leaves?", "options": ["It will increase.", "It will decrease.", "It will remain the same."], "correctAnswer": "It will decrease.", "image": null },
+            { id: 'p1q20', "question": "Which of these is a characteristic of a wind-pollinated flower?", "options": ["Large, colourful petals", "Sweet nectar", "Light, feathery stigmas"], "correctAnswer": "Light, feathery stigmas", "image": null }
+        ],
+        "Set 2: Human Systems": [
+            { id: 'p2q1', question: "In which part of the digestive system does the digestion of food begin?", options: ["Stomach", "Mouth", "Small intestine"], correctAnswer: "Mouth", image: null },
+            { id: 'p2q2', "question": "Where does most of the absorption of digested food into the bloodstream occur?", "options": ["Large intestine", "Stomach", "Small intestine"], "correctAnswer": "Small intestine", "image": null },
+            { id: 'p2q3', "question": "What is the main function of the large intestine?", "options": ["To digest proteins", "To absorb water from undigested food", "To absorb fats into the body"], "correctAnswer": "To absorb water from undigested food", "image": null },
+            { id: 'p2q4', "question": "What is the tube that connects the mouth to the stomach called?", "options": ["Windpipe", "Gullet", "Small intestine"], "correctAnswer": "Gullet", "image": null },
+            { id: 'p2q5', "question": "Which human system is responsible for breaking down food into simpler substances?", "options": ["Circulatory system", "Respiratory system", "Digestive system"], "correctAnswer": "Digestive system", "image": null },
+            { id: 'p2q6', "question": "In the respiratory system, where does the exchange of gases (oxygen and carbon dioxide) take place?", "options": ["Nose", "Windpipe", "Lungs (in the air sacs)"], "correctAnswer": "Lungs (in the air sacs)", "image": null },
+            { id: 'p2q7', "question": "When we breathe in, our rib cage moves...", "options": ["downwards and inwards.", "upwards and outwards.", "downwards and outwards."], "correctAnswer": "upwards and outwards.", "image": null },
+            { id: 'p2q8', "question": "What is the main function of the circulatory system?", "options": ["To break down food", "To transport substances around the body", "To take in oxygen"], "correctAnswer": "To transport substances around the body", "image": null },
+            { id: 'p2q9', "question": "Which part of the circulatory system pumps blood to all parts of the body?", "options": ["Lungs", "Brain", "Heart"], "correctAnswer": "Heart", "image": null },
+            { id: 'p2q10', "question": "Which blood vessels carry blood away from the heart?", "options": ["Arteries", "Veins", "Capillaries"], "correctAnswer": "Arteries", "image": null },
+            { id: 'p2q11', "question": "Which blood vessels carry blood towards the heart?", "options": ["Arteries", "Veins", "Capillaries"], "correctAnswer": "Veins", "image": null },
+            { id: 'p2q12', "question": "Blood rich in oxygen is usually found in...", "options": ["veins (except pulmonary vein).", "arteries (except pulmonary artery).", "all capillaries."], "correctAnswer": "arteries (except pulmonary artery).", "image": null },
+            { id: 'p2q13', "question": "Which system works with the circulatory system to provide oxygen to the body?", "options": ["Digestive system", "Respiratory system", "Skeletal system"], "correctAnswer": "Respiratory system", "image": null },
+            { id: 'p2q14', "question": "After digestion, nutrients are transported to all parts of the body by the...", "options": ["respiratory system.", "digestive system.", "circulatory system."], "correctAnswer": "circulatory system.", "image": null },
+            { id: 'p2q15', "question": "The air we breathe out contains more ________ than the air we breathe in.", "options": ["oxygen", "carbon dioxide", "nitrogen"], "correctAnswer": "carbon dioxide", "image": null },
+            { id: 'p2q16', "question": "Which of these is NOT part of the human digestive system?", "options": ["Stomach", "Small intestine", "Kidney"], "correctAnswer": "Kidney", "image": null },
+            { id: 'p2q17', "question": "What happens to our breathing rate when we exercise?", "options": ["It increases.", "It decreases.", "It stays the same."], "correctAnswer": "It increases.", "image": null },
+            { id: 'p2q18', "question": "What does the heart pump to all parts of our body?", "options": ["Air", "Water", "Blood"], "correctAnswer": "Blood", "image": null },
+            { id: 'p2q19', "question": "Digested food is absorbed through the walls of the small intestine which are...", "options": ["thick with few blood vessels.", "thin with many blood vessels.", "thick with many blood vessels."], "correctAnswer": "thin with many blood vessels.", "image": null },
+            { id: 'p2q20', "question": "The circulatory system transports digested food, water, oxygen and ________.", "options": ["undigested food", "waste materials", "air"], "correctAnswer": "waste materials", "image": null }
+        ],
+        "Set 3: Cells & Integrated Systems": [
+            { id: 'p3q1', question: "What is known as the basic building block of all living things?", options: ["An organ", "A system", "A cell"], correctAnswer: "A cell", image: null },
+            { id: 'p3q2', "question": "Which part of a cell controls all its activities?", "options": ["Cytoplasm", "Nucleus", "Cell membrane"], "correctAnswer": "Nucleus", "image": null },
+            { id: 'p3q3', "question": "Which of these parts is found in a plant cell but NOT in an animal cell?", "options": ["Nucleus", "Cell wall", "Cell membrane"], "correctAnswer": "Cell wall", "image": null },
+            { id: 'p3q4', "question": "What is the function of the cell wall in a plant cell?", "options": ["To control what enters and leaves the cell", "To provide a fixed shape and support", "To make food for the cell"], "correctAnswer": "To provide a fixed shape and support", "image": null },
+            { id: 'p3q5', "question": "The oxygen we breathe in is transported by the circulatory system to our body cells for what process?", "options": ["Digestion", "Photosynthesis", "Respiration"], "correctAnswer": "Respiration", "image": null },
+            { id: 'p3q6', "question": "Chloroplasts, which are needed for photosynthesis, are found in which type of cells?", "options": ["Animal cells", "Root cells of a plant", "Leaf cells of a plant"], "correctAnswer": "Leaf cells of a plant", "image": null },
+            { id: 'p3q7', "question": "The human digestive system breaks down food so that the nutrients are small enough to enter the...", "options": ["organs.", "systems.", "cells."], "correctAnswer": "cells.", "image": null },
+            { id: 'p3q8', "question": "Which two systems must work together to deliver digested food to all cells in the body?", "options": ["Digestive and Respiratory", "Digestive and Circulatory", "Respiratory and Circulatory"], "correctAnswer": "Digestive and Circulatory", "image": null },
+            { id: 'p3q9', "question": "A group of similar cells working together to perform a specific function is called...", "options": ["an organ.", "a tissue.", "a system."], "correctAnswer": "a tissue.", "image": null },
+            { id: 'p3q10', "question": "Which part controls what goes in and out of both plant and animal cells?", "options": ["Cell wall", "Nucleus", "Cell membrane"], "correctAnswer": "Cell membrane", "image": null },
+            { id: 'p3q11', "question": "Which part of a plant system has cells that contain the most chloroplasts?", "options": ["Roots", "Stem", "Leaves"], "correctAnswer": "Leaves", "image": null },
+            { id: 'p3q12', "question": "Carbon dioxide, a waste product of respiration in our cells, is removed from the body by which two systems working together?", "options": ["Digestive and Circulatory", "Circulatory and Respiratory", "Digestive and Respiratory"], "correctAnswer": "Circulatory and Respiratory", "image": null },
+            { id: 'p3q13', "question": "The heart, blood and blood vessels are all part of the circulatory system. The heart itself is an example of...", "options": ["a cell.", "a tissue.", "an organ."], "correctAnswer": "an organ.", "image": null },
+            { id: 'p3q14', "question": "A key difference between a plant cell and an animal cell is that a plant cell has a...", "options": ["regular shape.", "nucleus.", "cell membrane."], "correctAnswer": "regular shape.", "image": null },
+            { id: 'p3q15', "question": "The food made in a plant's leaves is transported to its root cells. Why do root cells need this food?", "options": ["To carry out photosynthesis", "For respiration to release energy", "To absorb water"], "correctAnswer": "For respiration to release energy", "image": null },
+            { id: 'p3q16', "question": "Which of these correctly shows the level of organisation in a human, from simplest to most complex?", "options": ["Cell -> Organ -> Tissue -> System", "Cell -> Tissue -> Organ -> System", "Tissue -> Cell -> Organ -> System"], "correctAnswer": "Cell -> Tissue -> Organ -> System", "image": null },
+            { id: 'p3q17', "question": "The jelly-like substance that fills a cell is called the...", "options": ["nucleus.", "cytoplasm.", "vacuole."], "correctAnswer": "cytoplasm.", "image": null },
+            { id: 'p3q18', "question": "The plant transport system is responsible for moving water and food. This is most similar to which human system?", "options": ["Digestive system", "Respiratory system", "Circulatory system"], "correctAnswer": "Circulatory system", "image": null },
+            { id: 'p3q19', "question": "What do the cells in our muscles need more of during exercise?", "options": ["Carbon dioxide and water", "Oxygen and digested food", "Sunlight and chlorophyll"], "correctAnswer": "Oxygen and digested food", "image": null },
+            { id: 'p3q20', "question": "Which part is present in both a leaf cell and a human cheek cell?", "options": ["Chloroplast", "Cytoplasm", "Cell wall"], "correctAnswer": "Cytoplasm", "image": null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-teal-500 hover:bg-teal-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.textContent = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            feedbackText.innerHTML = `Correct Answer: <span class="font-bold">${correctAnswer}</span><br><span class="prompt-guidance">Click the correct answer (green) to continue.</span>`;
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered these systems!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding of these systems is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'PSLE Science - Systems' }) // Add subject
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
