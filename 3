@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Synthesis & Grammar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText,
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state #feedbackText .prompt-guidance {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+        }
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-red-200 via-yellow-200 to-orange-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-orange-700">Welcome, Grammar Ace!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to begin your Grammar & Synthesis practice.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-orange-500 focus:border-orange-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6 text-lg">Start Practice!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-orange-700 mb-2">Grammar & Synthesis</h1>
+            <p class="text-slate-600 mb-8">Select a set to begin your practice.</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-orange-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-orange-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <p id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></p>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-orange-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-orange-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-orange-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-amber-500 hover:bg-amber-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleGrammarFlashcardAppUserName_v3'; // New version key for new topic
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- FLASHCARD SETS ---
+    const allFlashcardSets = {
+        "Set 1: Tenses & Subject-Verb Agreement": [
+            { id: 's1q1', question: "The committee, comprising ten members, ________ to a decision yesterday.", options: ["come", "comes", "came"], correctAnswer: "came", image: null },
+            { id: 's1q2', question: "By the time the guests arrive, I ________ all the cooking.", options: ["will finish", "will have finished", "am finishing"], correctAnswer: "will have finished", image: null },
+            { id: 's1q3', question: "Neither of the athletes ________ injured during the race.", options: ["was", "were", "are"], correctAnswer: "was", image: null },
+            { id: 's1q4', question: "The pair of scissors on the table ________ to my sister.", options: ["belong", "belongs", "are belonging"], correctAnswer: "belongs", image: null },
+            { id: 's1q5', question: "Last week, my teacher told us that she ________ to Japan for a holiday.", options: ["will travel", "was travelling", "is travelling"], correctAnswer: "was travelling", image: null },
+            { id: 's1q6', question: "The news from the ministry ________ usually released in the evening.", options: ["are", "is", "be"], correctAnswer: "is", image: null },
+            { id: 's1q7', question: "My family ________ visiting our relatives in Malaysia next month.", options: ["are", "is", "were"], correctAnswer: "is", image: null },
+            { id: 's1q8', question: "He ________ for three hours, so he decided to take a break.", options: ["has been studying", "had been studying", "was studying"], correctAnswer: "had been studying", image: null },
+            { id: 's1q9', question: "The man with his two dogs ________ past my house every morning.", options: ["walk", "walks", "is walking"], correctAnswer: "walks", image: null },
+            { id: 's1q10', question: "Look! The birds ________ back to their nest.", options: ["fly", "are flying", "flew"], correctAnswer: "are flying", image: null },
+            { id: 's1q11', question: "Every one of the participants ________ given a goodie bag.", options: ["were", "are", "was"], correctAnswer: "was", image: null },
+            { id: 's1q12', question: "She ________ the piano since she was five years old.", options: ["is playing", "played", "has played"], correctAnswer: "has played", image: null },
+            { id: 's1q13', question: "Mathematics ________ my favourite subject in school.", options: ["is", "are", "have been"], correctAnswer: "is", image: null },
+            { id: 's1q14', question: "The team, as well as their coach, ________ celebrating the victory.", options: ["is", "are", "were"], correctAnswer: "is", image: null },
+            { id: 's1q15', question: "After he ________ his dinner, he went for a walk.", options: ["eats", "had eaten", "has eaten"], correctAnswer: "had eaten", image: null },
+            { id: 's1q16', question: "Ten kilometres ________ a long distance to run for a beginner.", options: ["is", "are", "be"], correctAnswer: "is", image: null },
+            { id: 's1q17', "question": "I did not know that you ________ to this school before.", "options": ["had gone", "have gone", "went"], "correctAnswer": "had gone", "image": null },
+            { id: 's1q18', "question": "The police ________ investigating the case.", "options": ["is", "are", "was"], "correctAnswer": "are", "image": null },
+            { id: 's1q19', "question": "Either my parents or my elder brother ________ me to school tomorrow.", "options": ["is driving", "are driving", "drive"], "correctAnswer": "is driving", "image": null },
+            { id: 's1q20', "question": "She ________ a phone call when I walked into the room.", "options": ["was making", "made", "has made"], "correctAnswer": "was making", "image": null }
+        ],
+        "Set 2: Voice, Speech & Conjunctions": [
+            { id: 's2q1', question: "The project must be completed by the students. (Change to Active Voice)", options: ["The project must complete the students.", "The students must complete the project.", "The students have to be completed by the project."], correctAnswer: "The students must complete the project.", image: null },
+            { id: 's2q2', "question": "The hall is being decorated by the committee. (Change to Active Voice)", "options": ["The committee decorated the hall.", "The committee is decorating the hall.", "The committee decorates the hall."], "correctAnswer": "The committee is decorating the hall.", "image": null },
+            { id: 's2q3', question: "\"I am doing my homework now,\" said Tom. (Change to Indirect Speech)", options: ["Tom said he was doing his homework then.", "Tom said he is doing his homework now.", "Tom said I was doing my homework then."], correctAnswer: "Tom said he was doing his homework then.", image: null },
+            { id: 's2q4', "question": "\"We will go to the zoo tomorrow,\" the teacher told us. (Change to Indirect Speech)", "options": ["The teacher told us they will go to the zoo tomorrow.", "The teacher told us we would go to the zoo the next day.", "The teacher told us they would go to the zoo the next day."], "correctAnswer": "The teacher told us they would go to the zoo the next day.", "image": null },
+            { id: 's2q5', question: "He was late for school. He missed the bus. (Combine using 'because')", options: ["He was late for school because he missed the bus.", "He missed the bus because he was late for school.", "Because he was late, so he missed the bus."], correctAnswer: "He was late for school because he missed the bus.", image: null },
+            { id: 's2q6', "question": "She studied very hard. She did not pass the examination. (Combine using 'Although')", "options": ["Although she studied very hard, but she did not pass.", "She did not pass although she studied very hard.", "Although she studied very hard, so she did not pass."], "correctAnswer": "She did not pass although she studied very hard.", "image": null },
+            { id: 's2q7', "question": "The notice was put up by the principal. (Change to Active Voice)", "options": ["The principal was putting up the notice.", "The notice put up the principal.", "The principal put up the notice."], "correctAnswer": "The principal put up the notice.", "image": null },
+            { id: 's2q8', "question": "\"Did you finish your food?\" my mother asked. (Change to Indirect Speech)", "options": ["My mother asked if I had finished my food.", "My mother asked did I finish my food.", "My mother asked if I finished my food."], "correctAnswer": "My mother asked if I had finished my food.", "image": null },
+            { id: 's2q9', "question": "You can have the apple. You can have the orange. You cannot have both. (Combine using 'either...or')", "options": ["You can have either the apple or the orange.", "You can have either the apple and the orange.", "You can either have the apple or the orange."], "correctAnswer": "You can have either the apple or the orange.", "image": null },
+            { id: 's2q10', "question": "He did not revise for the test. He did not complete his homework. (Combine using 'neither...nor')", "options": ["He neither revise for the test nor complete his homework.", "He did neither revise for the test nor completed his homework.", "He neither revised for the test nor completed his homework."], "correctAnswer": "He neither revised for the test nor completed his homework.", "image": null },
+            { id: 's2q11', "question": "Someone has stolen my wallet. (Change to Passive Voice)", "options": ["My wallet was stolen by someone.", "My wallet is stolen.", "My wallet has been stolen."], "correctAnswer": "My wallet has been stolen.", "image": null },
+            { id: 's2q12', "question": "\"Don't touch that wire!\" the electrician warned me. (Change to Indirect Speech)", "options": ["The electrician warned me to not touch that wire.", "The electrician warned me not to touch that wire.", "The electrician warned me don't touch that wire."], "correctAnswer": "The electrician warned me not to touch that wire.", "image": null },
+            { id: 's2q13', "question": "The rain was very heavy. The match was cancelled. (Combine using 'due to')", "options": ["The match was cancelled due to the rain was very heavy.", "Due to the heavy rain, the match was cancelled.", "Due to the match was cancelled, the rain was heavy."], "correctAnswer": "Due to the heavy rain, the match was cancelled.", "image": null },
+            { id: 's2q14', "question": "The firemen rescued the cat from the tree. (Change to Passive Voice)", "options": ["The cat was rescued from the tree by the firemen.", "The cat is rescued from the tree by the firemen.", "The cat has been rescued from the tree by the firemen."], "correctAnswer": "The cat was rescued from the tree by the firemen.", "image": null },
+            { id: 's2q15', "question": "\"Where did you put my keys?\" she asked him. (Change to Indirect Speech)", "options": ["She asked him where he had put her keys.", "She asked him where did he put her keys.", "She asked him where had he put her keys."], "correctAnswer": "She asked him where he had put her keys.", "image": null },
+            { id: 's2q16', "question": "He is talented. He is also very humble. (Combine using 'not only...but also')", "options": ["He is not only talented but also very humble.", "He is not only talented but he is also very humble.", "Not only he is talented, but also very humble."], "correctAnswer": "He is not only talented but also very humble.", "image": null },
+            { id: 's2q17', "question": "The class monitor will distribute the worksheets. (Change to Passive Voice)", "options": ["The worksheets are distributed by the class monitor.", "The worksheets will be distributed by the class monitor.", "The worksheets would be distributed by the class monitor."], "correctAnswer": "The worksheets will be distributed by the class monitor.", "image": null },
+            { id: 's2q18', "question": "\"Please help me with this box,\" said the old lady. (Change to Indirect Speech)", "options": ["The old lady said to please help her with that box.", "The old lady asked me to help her with that box.", "The old lady asked if I can help her with that box."], "correctAnswer": "The old lady asked me to help her with that box.", "image": null },
+            { id: 's2q19', "question": "He woke up late. He was not late for the meeting. (Combine using 'In spite of')", "options": ["In spite of he woke up late, he was not late.", "In spite of waking up late, he was not late for the meeting.", "In spite of being late, he woke up."], "correctAnswer": "In spite of waking up late, he was not late for the meeting.", "image": null },
+            { id: 's2q20', "question": "Who wrote this book? (Change to Passive Voice)", "options": ["By who was this book written?", "By whom was this book written?", "Whom was this book written by?"], "correctAnswer": "By whom was this book written?", "image": null }
+        ],
+        "Set 3: Conditionals & Integrated Application": [
+            { id: 's3q1', question: "If I ________ a bird, I would fly all over the world.", options: ["am", "was", "were"], correctAnswer: "were", image: null },
+            { id: 's3q2', question: "Unless you ________ me the truth, I cannot help you.", options: ["tell", "told", "don't tell"], correctAnswer: "tell", image: null },
+            { id: 's3q3', question: "Hardly had the teacher left the classroom ________ the pupils started making noise.", options: ["than", "when", "then"], correctAnswer: "when", image: null },
+            { id: 's3q4', "question": "If you heat water to 100 degrees Celsius, it ________.", "options": ["will boil", "boils", "would boil"], "correctAnswer": "boils", "image": null },
+            { id: 's3q5', question: "The captain, together with his entire crew, ________ safely rescued.", options: ["was", "were", "are"], correctAnswer: "was", image: null },
+            { id: 's3q6', "question": "If you ________ for the test, you would not have failed.", "options": ["had studied", "studied", "study"], "correctAnswer": "had studied", "image": null },
+            { id: 's3q7', "question": "No sooner had he submitted the report ________ he realised he had made a mistake.", "options": ["when", "then", "than"], "correctAnswer": "than", "image": null },
+            { id: 's3q8', "question": "My father asked me ________ I had finished all my homework.", "options": ["that", "if", "had"], "correctAnswer": "if", "image": null },
+            { id: 's3q9', "question": "A number of students ________ absent from school today.", "options": ["is", "was", "are"], "correctAnswer": "are", "image": null },
+            { id: 's3q10', "question": "The furniture in this room ________ imported from Italy.", "options": ["are", "is", "were"], "correctAnswer": "is", "image": null },
+            { id: 's3q11', "question": "________ you listen carefully, you will not understand the topic.", "options": ["If", "When", "Unless"], "correctAnswer": "Unless", "image": null },
+            { id: 's3q12', "question": "The announcement ________ by the principal just a moment ago.", "options": ["was made", "is made", "has been made"], "correctAnswer": "was made", "image": null },
+            { id: 's3q13', "question": "She will be very happy if her favourite team ________ the match.", "options": ["wins", "won", "will win"], "correctAnswer": "wins", "image": null },
+            { id: 's3q14', "question": "The boy admitted ________ the window during the game.", "options": ["to break", "breaking", "to have broken"], "correctAnswer": "breaking", "image": null },
+            { id: 's3q15', "question": "The bread and butter ________ served for breakfast every morning.", "options": ["is", "are", "were"], "correctAnswer": "is", "image": null },
+            { id: 's3q16', "question": "He was made ________ all the chores by himself.", "options": ["do", "to do", "doing"], "correctAnswer": "to do", "image": null },
+            { id: 's3q17', "question": "If he ________ earlier, he would have caught the train.", "options": ["had left", "left", "leaves"], "correctAnswer": "had left", "image": null },
+            { id: 's3q18', "question": "All the equipment in the science lab ________ checked regularly.", "options": ["is", "are", "were"], "correctAnswer": "is", "image": null },
+            { id: 's3q19', "question": "The teacher told the class that the Earth ________ around the Sun.", "options": ["revolved", "revolves", "is revolving"], "correctAnswer": "revolves", "image": null },
+            { id: 's3q20', "question": "________ the bad weather, the school's sports day was postponed.", "options": ["Because", "Since", "Owing to"], "correctAnswer": "Owing to", "image": null }
+        ],
+        "Set 4: Pronouns & Articles": [
+            { id: 's4q1', question: "My brother and ________ went to the library together.", options: ["me", "myself", "I"], correctAnswer: "I", image: null },
+            { id: 's4q2', question: "The teacher gave the sweets to Sarah and ________.", options: ["I", "me", "myself"], correctAnswer: "me", image: null },
+            { id: 's4q3', question: "The cat is grooming ________ fur.", options: ["it's", "its'", "its"], correctAnswer: "its", image: null },
+            { id: 's4q4', question: "This beautiful scarf is not yours; it is ________.", options: ["my", "mine", "me"], correctAnswer: "mine", image: null },
+            { id: 's4q5', question: "The children should be proud of ________ for winning the competition.", options: ["themself", "themselves", "theirselves"], correctAnswer: "themselves", image: null },
+            { id: 's4q6', question: "Each of the participants must bring ________ own stationery.", options: ["their", "his or her", "they're"], correctAnswer: "his or her", image: null },
+            { id: 's4q7', question: "If a person works hard, ________ will surely succeed.", options: ["they", "them", "he or she"], correctAnswer: "he or she", image: null },
+            { id: 's4q8', question: "The team celebrated ________ victory with a big party.", options: ["its", "it's", "their"], correctAnswer: "its", image: null },
+            { id: 's4q9', question: "My father is ________ honourable man.", options: ["a", "an", "the"], correctAnswer: "an", image: null },
+            { id: 's4q10', question: "I study at ________ university in the city.", options: ["a", "an", "the"], correctAnswer: "a", image: null },
+            { id: 's4q11', question: "We waited for about ________ hour for the bus to arrive.", options: ["a", "an", "the"], correctAnswer: "an", image: null },
+            { id: 's4q12', question: "Could you please pass me ________ salt?", options: ["a", "an", "the"], correctAnswer: "the", image: null },
+            { id: 's4q13', question: "________ moon is very bright tonight.", options: ["A", "An", "The"], correctAnswer: "The", image: null },
+            { id: 's4q14', question: "She is ________ tallest girl in our school.", options: ["a", "an", "the"], correctAnswer: "the", image: null },
+            { id: 's4q15', question: "My sister is learning to play ________ violin.", options: ["a", "an", "the"], correctAnswer: "the", image: null },
+            { id: 's4q16', question: "We had ________ dinner at a famous restaurant.", options: ["a", "the", "no article needed"], correctAnswer: "no article needed", image: null },
+            { id: 's4q17', question: "The responsibility for the project is ________.", options: ["our", "us", "ours"], correctAnswer: "ours", image: null },
+            { id: 's4q18', question: "________ is important to be punctual.", options: ["It", "Its", "It's"], correctAnswer: "It", image: null },
+            { id: 's4q19', question: "I saw ________ eagle soaring high in the sky.", options: ["a", "an", "the"], correctAnswer: "an", image: null },
+            { id: 's4q20', question: "John helped ________ to a slice of cake.", options: ["him", "he", "himself"], correctAnswer: "himself", image: null }
+        ],
+        "Set 5: Prepositions & Adjectives/Adverbs": [
+            { id: 's5q1', question: "The concert will start ________ 8 p.m. sharp.", options: ["on", "in", "at"], correctAnswer: "at", image: null },
+            { id: 's5q2', question: "My birthday is ________ the fifth of May.", options: ["on", "in", "at"], correctAnswer: "on", image: null },
+            { id: 's5q3', question: "The cat is sleeping peacefully ________ the sofa.", options: ["in", "on", "at"], correctAnswer: "on", image: null },
+            { id: 's5q4', question: "You must submit the assignment ________ Friday.", options: ["by", "with", "for"], correctAnswer: "by", image: null },
+            { id: 's5q5', question: "She is very good ________ drawing portraits.", options: ["in", "at", "on"], correctAnswer: "at", image: null },
+            { id: 's5q6', question: "He is allergic ________ nuts, so he can't eat this cake.", options: ["with", "from", "to"], correctAnswer: "to", image: null },
+            { id: 's5q7', question: "The teacher was pleased ________ our hard work.", options: ["with", "of", "by"], correctAnswer: "with", image: null },
+            { id: 's5q8', question: "This book is different ________ the one I read last week.", options: ["than", "from", "to"], correctAnswer: "from", image: null },
+            { id: 's5q9', question: "She spoke very ________, so I could not hear her.", options: ["soft", "softly", "softer"], correctAnswer: "softly", image: null },
+            { id: 's5q10', question: "He is a ________ driver and has never had an accident.", options: ["careful", "carefully", "care"], correctAnswer: "careful", image: null },
+            { id: 's5q11', question: "The soup tastes ________. You should try it.", options: ["delicious", "deliciously", "delightful"], correctAnswer: "delicious", image: null },
+            { id: 's5q12', question: "Of the two runners, Ali is the ________.", options: ["fast", "faster", "fastest"], correctAnswer: "faster", image: null },
+            { id: 's5q13', question: "This is the ________ book I have ever read.", options: ["more interesting", "most interesting", "interestingest"], correctAnswer: "most interesting", image: null },
+            { id: 's5q14', "question": "Her performance in the test was ________ than last time.", "options": ["bad", "worse", "worst"], "correctAnswer": "worse", "image": null },
+            { id: 's5q15', "question": "Of all the students, she did the ________ in the examination.", "options": ["good", "better", "best"], "correctAnswer": "best", "image": null },
+            { id: 's5q16', "question": "I am not familiar ________ this part of the city.", "options": ["with", "to", "about"], "correctAnswer": "with", "image": null },
+            { id: 's5q17', "question": "The boy jumped ________ the wall and ran away.", "options": ["on", "over", "at"], "correctAnswer": "over", "image": null },
+            { id: 's5q18', "question": "The story was so sad that it ended ________.", "options": ["abrupt", "abruptly", "abruption"], "correctAnswer": "abruptly", "image": null },
+            { id: 's5q19', "question": "This chair is not very ________.", "options": ["comfortably", "comfortable", "comforting"], "correctAnswer": "comfortable", "image": null },
+            { id: 's5q20', "question": "He insisted ________ paying for the meal.", "options": ["on", "to", "for"], "correctAnswer": "on", "image": null }
+        ],
+        "Set 6: Punctuation & Mixed Review": [
+            { id: 's6q1', question: "What a beautiful painting________", options: [".", "!", "?"], correctAnswer: "!", image: null },
+            { id: 's6q2', question: "Have you finished your homework________", options: [".", "!", "?"], correctAnswer: "?", image: null },
+            { id: 's6q3', question: "This is my ________ new bicycle.", options: ["sister's", "sisters'", "sisters"], correctAnswer: "sister's", image: null },
+            { id: 's6q4', question: "All the ________ uniforms are hanging in the locker room.", options: ["player's", "players", "players'"], correctAnswer: "players'", image: null },
+            { id: 's6q5', question: "________ going to rain later, so bring an umbrella.", options: ["Its", "It's", "Its'"], correctAnswer: "It's", image: null },
+            { id: 's6q6', question: "________ you please help me carry these books?", options: ["Would.", "Would,", "Would"], correctAnswer: "Would", image: null },
+            { id: 's6q7', question: "She asked, ________Are you coming to the party________", options: ["\"Are you coming to the party?\"", "'Are you coming to the party?'.", "\"Are you coming to the party.\""], correctAnswer: "\"Are you coming to the party?\"", image: null },
+            { id: 's6q8', question: "I need to buy bread________ milk________ and eggs from the store.", options: ["bread, milk, and", "bread milk and", "bread, milk and,"], correctAnswer: "bread, milk, and", image: null },
+            { id: 's6q9', question: "These are the ________ toys.", options: ["children's", "childrens'", "childs'"], correctAnswer: "children's", image: null },
+            { id: 's6q10', question: "After the movie ended________ we went home.", options: ["ended", "ended,", "ended."], correctAnswer: "ended,", image: null },
+            { id: 's6q11', question: "Neither of my brothers ________ how to cook.", options: ["know", "knows", "are knowing"], correctAnswer: "knows", image: null },
+            { id: 's6q12', question: "The box of crayons ________ on the table.", options: ["is", "are", "were"], correctAnswer: "is", image: null },
+            { id: 's6q13', question: "If he ________ harder, he would have passed the test.", options: ["had studied", "studied", "studies"], correctAnswer: "had studied", image: null },
+            { id: 's6q14', "question": "The package was delivered to my neighbours and ________.", "options": ["I", "me", "myself"], "correctAnswer": "me", "image": null },
+            { id: 's6q15', "question": "This is the ________ difficult puzzle in the entire book.", "options": ["more", "most", "much"], "correctAnswer": "most", "image": null },
+            { id: 's6q16', "question": "The story was written ________ a famous author.", "options": ["with", "by", "from"], "correctAnswer": "by", "image": null },
+            { id: 's6q17', "question": "He runs ________ every morning to stay fit.", "options": ["quick", "quickly", "quicker"], "correctAnswer": "quickly", "image": null },
+            { id: 's6q18', "question": "Unless you ________ now, you will be late.", "options": ["leave", "don't leave", "left"], "correctAnswer": "leave", "image": null },
+            { id: 's6q19', "question": "\"Don't make so much noise________\" the librarian whispered.", "options": ["!\"", "?\"", ",\""], "correctAnswer": ",\"", "image": null },
+            { id: 's6q20', "question": "The man ________ you met yesterday is my uncle.", "options": ["which", "who", "whose"], "correctAnswer": "who", "image": null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-orange-500 hover:bg-orange-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.textContent = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            feedbackText.innerHTML = `Correct Answer: <span class="font-bold">${correctAnswer}</span><br><span class="prompt-guidance">Click the correct answer (green) to continue.</span>`;
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You're a true grammar ace!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Great work! Keep refining your skills!";
+        else encouragementTextEl.textContent = "Good effort! More practice will lead to mastery.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Grammar & Synthesis' }) // Add subject
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
