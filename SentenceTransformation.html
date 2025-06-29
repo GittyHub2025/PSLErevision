@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Sentence Transformation Practice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText,
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state #feedbackText .prompt-guidance {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+        }
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-indigo-700">Welcome, Sentence Shaper!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to begin your Transformation practice.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-indigo-500 focus:border-indigo-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-indigo-500 hover:bg-indigo-600 text-white w-full py-3 px-6 text-lg">Start Shaping!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-indigo-700 mb-2">Sentence Transformation</h1>
+            <p class="text-slate-600 mb-8">Select a set to master sentence rewriting.</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-indigo-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <p id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></p>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-indigo-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-indigo-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-indigo-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-amber-500 hover:bg-amber-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-indigo-500 hover:bg-indigo-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleTransformationAppUserName_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- FLASHCARD SETS ---
+    const allFlashcardSets = {
+        "Transformation Set 1": [
+            { id: 't1q1', question: "The mechanic is repairing the car. (Begin with 'The car...')", options: ["The car is repaired by the mechanic.", "The car is being repaired by the mechanic.", "The car was being repaired by the mechanic."], correctAnswer: "The car is being repaired by the mechanic." },
+            { id: 't1q2', question: "She asked him, \"Are you going to the party tonight?\" (Report the speech)", options: ["She asked him if he was going to the party that night.", "She asked him was he going to the party tonight.", "She asked him if he is going to the party that night."], correctAnswer: "She asked him if he was going to the party that night." },
+            { id: 't1q3', question: "He was sick, but he still went to school. (Rewrite using 'Although')", options: ["Although he was sick, but he still went to school.", "He still went to school although being sick.", "Although he was sick, he still went to school."], correctAnswer: "Although he was sick, he still went to school." },
+            { id: 't1q4', question: "The results were announced by the principal. (Begin with 'The principal...')", options: ["The principal announced the results.", "The principal was announcing the results.", "The principal has announced the results."], correctAnswer: "The principal announced the results." },
+            { id: 't1q5', question: "The boy told his mother that he had finished his homework. (Change to direct speech)", options: ["The boy told his mother, \"I have finished my homework.\"", "The boy told his mother, \"I had finished my homework.\"", "The boy told his mother, \"I finished my homework.\""], correctAnswer: "The boy told his mother, \"I have finished my homework.\"" },
+            { id: 't1q6', question: "If you don't hurry, you will miss the bus. (Rewrite using 'unless')", options: ["You will miss the bus unless you don't hurry.", "Unless you hurry, you will miss the bus.", "You will miss the bus unless you will hurry."], correctAnswer: "Unless you hurry, you will miss the bus." },
+            { id: 't1q7', question: "Someone has stolen my wallet. (Change to passive voice)", options: ["My wallet was stolen.", "My wallet is being stolen.", "My wallet has been stolen."], correctAnswer: "My wallet has been stolen." },
+            { id: 't1q8', question: "\"Don't run along the corridor!\" the teacher warned the pupils. (Report the speech)", options: ["The teacher warned the pupils to not run along the corridor.", "The teacher warned the pupils don't run along the corridor.", "The teacher warned the pupils not to run along the corridor."], correctAnswer: "The teacher warned the pupils not to run along the corridor." },
+            { id: 't1q9', question: "He has the ability to swim across the channel. (Rewrite using 'able')", options: ["He is able to swim across the channel.", "He is able for swimming across the channel.", "He is able with swimming across the channel."], correctAnswer: "He is able to swim across the channel." },
+            { id: 't1q10', question: "The company hired new employees last month. (Begin with 'New employees...')", options: ["New employees were hired by the company last month.", "New employees are hired by the company last month.", "New employees have been hired by the company last month."], correctAnswer: "New employees were hired by the company last month." },
+            { id: 't1q11', question: "He asked me where I had put his keys. (Change to direct speech)", options: ["He asked me, \"Where did you put my keys?\"", "He asked me, \"Where you had put my keys?\"", "He asked me, \"Where you put my keys?\""], correctAnswer: "He asked me, \"Where did you put my keys?\"" },
+            { id: 't1q12', question: "The heavy rain did not stop them from playing. (Rewrite using 'Although')", options: ["Although it was raining heavily, they continued playing.", "Although the heavy rain, they played.", "Although raining, they still played."], correctAnswer: "Although it was raining heavily, they continued playing." },
+            { id: 't1q13', question: "The cat was rescued by the firefighter. (Begin with 'The firefighter...')", options: ["The firefighter rescued the cat.", "The firefighter was rescuing the cat.", "The firefighter rescues the cat."], correctAnswer: "The firefighter rescued the cat." },
+            { id: 't1q14', question: "He was proud of his team's victory. (Rewrite using 'pride')", options: ["He took pride in his team's victory.", "He had pride for his team's victory.", "He was filled with pride of his team's victory."], correctAnswer: "He took pride in his team's victory." },
+            { id: 't1q15', question: "If it does not stop raining, the match will be cancelled. (Rewrite using 'unless')", options: ["The match will be cancelled unless it stops raining.", "The match will be cancelled unless it doesn't stop raining.", "Unless the match is cancelled, it will stop raining."], correctAnswer: "The match will be cancelled unless it stops raining." },
+            { id: 't1q16', question: "The letters have been mailed by Susan. (Begin with 'Susan...')", options: ["Susan has been mailing the letters.", "Susan has mailed the letters.", "Susan mailed the letters."], correctAnswer: "Susan has mailed the letters." },
+            { id: 't1q17', question: "\"I will meet you here tomorrow,\" he said. (Report the speech)", options: ["He said he would meet me there the next day.", "He said he will meet me here tomorrow.", "He said he would meet me here the next day."], correctAnswer: "He said he would meet me there the next day." },
+            { id: 't1q18', question: "She behaved with politeness. (Rewrite using 'politely')", options: ["She behaved politely.", "She was behaving with politely.", "Her behaviour was politely."], correctAnswer: "She behaved politely." },
+            { id: 't1q19', question: "The problem can be solved by an expert. (Begin with 'An expert...')", options: ["An expert could solve this problem.", "An expert solves this problem.", "An expert can solve this problem."], correctAnswer: "An expert can solve this problem." },
+            { id: 't1q20', question: "He failed the test because he was lazy. (Rewrite using 'laziness')", options: ["His laziness was the cause of his failure in the test.", "He failed the test due to his laziness.", "Because of being lazy, he failed the test."], correctAnswer: "He failed the test due to his laziness." }
+        ],
+        "Transformation Set 2": [
+            { id: 't2q1', question: "He was injured. He completed the marathon. (Rewrite using 'In spite of')", options: ["In spite of his injury, he completed the marathon.", "In spite of he was injured, he completed the marathon.", "In spite of his injury but he completed the marathon."], correctAnswer: "In spite of his injury, he completed the marathon." },
+            { id: 't2q2', question: "He was foolish to reject the offer. (Rewrite using 'foolishness')", options: ["He showed his foolishness by rejecting the offer.", "His foolishness was to reject the offer.", "He rejected the offer in his foolishness."], correctAnswer: "He showed his foolishness by rejecting the offer." },
+            { id: 't2q3', question: "The students are decorating the classroom. (Begin with 'The classroom...')", options: ["The classroom is decorated by the students.", "The classroom was being decorated by the students.", "The classroom is being decorated by the students."], correctAnswer: "The classroom is being decorated by the students." },
+            { id: 't2q4', question: "The heavy rain did not stop them from playing football. (Rewrite using 'Despite')", options: ["Despite it was raining heavily, they played football.", "Despite the heavy rain, they continued playing football.", "Despite the heavy rain but they played football."], correctAnswer: "Despite the heavy rain, they continued playing football." },
+            { id: 't2q5', question: "The librarian asked the children to be quiet. (Change to direct speech)", options: ["The librarian asked, \"Are you quiet, children?\"", "The librarian said, \"Please be quiet, children.\"", "The librarian asked, \"Children, you must be quiet.\""], correctAnswer: "The librarian said, \"Please be quiet, children.\"" },
+            { id: 't2q6', question: "She was patient and waited for her turn. (Rewrite using 'patience')", options: ["She waited for her turn with patience.", "Her patience made her wait for her turn.", "She showed her patience for her turn."], correctAnswer: "She waited for her turn with patience." },
+            { id: 't2q7', question: "The song was performed beautifully by the choir. (Begin with 'The choir...')", options: ["The choir performed the song beautifully.", "The choir performs the song beautifully.", "The choir was performing the song beautifully."], correctAnswer: "The choir performed the song beautifully." },
+            { id: 't2q8', question: "You must have a ticket to enter the cinema. (Rewrite using 'unless')", options: ["You cannot enter the cinema unless you have a ticket.", "You can enter the cinema unless you have a ticket.", "Unless you have a ticket, you can enter the cinema."], correctAnswer: "You cannot enter the cinema unless you have a ticket." },
+            { id: 't2q9', question: "\"What time does the train leave?\" he asked. (Report the speech)", options: ["He asked what time did the train leave.", "He asked what time the train left.", "He asked what time the train leaves."], correctAnswer: "He asked what time the train left." },
+            { id: 't2q10', question: "The room was silent. (Rewrite using 'silence')", options: ["There was silence in the room.", "The room had a silence.", "Silence was in the room."], correctAnswer: "There was silence in the room." },
+            { id: 't2q11', question: "The rich man was not happy. (Rewrite using 'Despite')", options: ["Despite rich, the man was not happy.", "Despite his riches, the man was not happy.", "Despite the rich man, he was not happy."], correctAnswer: "Despite his riches, the man was not happy." },
+            { id: 't2q12', question: "Shakespeare wrote 'Hamlet'. (Begin with ''Hamlet'...')", options: ["'Hamlet' was written by Shakespeare.", "'Hamlet' is written by Shakespeare.", "'Hamlet' was being written by Shakespeare."], correctAnswer: "'Hamlet' was written by Shakespeare." },
+            { id: 't2q13', question: "Her explanation was clear. (Rewrite using 'clearly')", options: ["She explained with clear.", "She explained clearly.", "Her explanation was clearly."], correctAnswer: "She explained clearly." },
+            { id: 't2q14', question: "\"I saw this movie last week,\" Tom said. (Report the speech)", options: ["Tom said he had seen that movie the previous week.", "Tom said he saw that movie last week.", "Tom said he had seen this movie the week before."], correctAnswer: "Tom said he had seen that movie the previous week." },
+            { id: 't2q15', question: "He was very brave during the rescue. (Rewrite using 'bravery')", options: ["He showed bravery during the rescue.", "He was bravery during the rescue.", "His rescue was full of bravery."], correctAnswer: "He showed bravery during the rescue." },
+            { id: 't2q16', question: "The baby has been fed by mother. (Begin with 'Mother...')", options: ["Mother has fed the baby.", "Mother fed the baby.", "Mother has been feeding the baby."], correctAnswer: "Mother has fed the baby." },
+            { id: 't2q17', question: "The traffic was heavy, but we arrived on time. (Rewrite using 'In spite of')", options: ["In spite of the traffic was heavy, we arrived on time.", "In spite of the heavy traffic, we arrived on time.", "In spite of heavy traffic but we arrived on time."], correctAnswer: "In spite of the heavy traffic, we arrived on time." },
+            { id: 't2q18', question: "She told me that she was feeling unwell. (Change to direct speech)", options: ["She told me, \"I am feeling unwell.\"", "She told me, \"I was feeling unwell.\"", "She told me, \"She is feeling unwell.\""], correctAnswer: "She told me, \"I am feeling unwell.\"" },
+            { id: 't2q19', question: "The chef will prepare a special meal. (Begin with 'A special meal...')", options: ["A special meal will be prepared by the chef.", "A special meal is prepared by the chef.", "A special meal would be prepared by the chef."], correctAnswer: "A special meal will be prepared by the chef." },
+            { id: 't2q20', question: "She was honest, so the manager trusted her. (Rewrite using 'honesty')", options: ["The manager trusted her because of her honesty.", "Her honesty was trusted by the manager.", "The manager trusted her for she was honesty."], correctAnswer: "The manager trusted her because of her honesty." }
+        ],
+        "Transformation Set 3": [
+            { id: 't3q1', question: "As soon as the teacher entered the class, the students stood up. (Begin with 'No sooner...')", options: ["No sooner the teacher had entered than the students stood up.", "No sooner had the teacher entered than the students stood up.", "No sooner had the teacher entered when the students stood up."], correctAnswer: "No sooner had the teacher entered than the students stood up." },
+            { id: 't3q2', question: "He had just finished his dinner when the doorbell rang. (Begin with 'Hardly...')", options: ["Hardly he had finished his dinner when the doorbell rang.", "Hardly had he finished his dinner than the doorbell rang.", "Hardly had he finished his dinner when the doorbell rang."], correctAnswer: "Hardly had he finished his dinner when the doorbell rang." },
+            { id: 't3q3', question: "The plane took off. Immediately, I realised I had left my passport. (Begin with 'Scarcely...')", options: ["Scarcely had the plane taken off when I realised I had left my passport.", "Scarcely the plane had taken off when I realised I had left my passport.", "Scarcely had the plane taken off than I realised I had left my passport."], correctAnswer: "Scarcely had the plane taken off when I realised I had left my passport." },
+            { id: 't3q4', question: "The thief was caught by the police. (Begin with 'The police...')", options: ["The police have caught the thief.", "The police was catching the thief.", "The police caught the thief."], correctAnswer: "The police caught the thief." },
+            { id: 't3q5', question: "He was so excited that he could not sleep. (Rewrite using 'too')", options: ["He was too excited that he could not sleep.", "He was too excited to sleep.", "He was too excited for sleeping."], correctAnswer: "He was too excited to sleep." },
+            { id: 't3q6', question: "\"I will return this book tomorrow,\" she promised. (Report the speech)", options: ["She promised she will return that book the next day.", "She promised she would return that book tomorrow.", "She promised she would return that book the next day."], correctAnswer: "She promised she would return that book the next day." },
+            { id: 't3q7', question: "He is both a talented musician and a skilled artist. (Begin with 'Not only...')", options: ["Not only he is a talented musician, but also a skilled artist.", "Not only is he a talented musician but he is also a skilled artist.", "Not only is he a talented musician but also a skilled artist."], correctAnswer: "Not only is he a talented musician but also a skilled artist." },
+            { id: 't3q8', question: "I had just locked the door when I heard a noise inside. (Begin with 'Hardly...')", options: ["Hardly had I locked the door when I heard a noise inside.", "Hardly I had locked the door when I heard a noise inside.", "Hardly had I locked the door than I heard a noise inside."], correctAnswer: "Hardly had I locked the door when I heard a noise inside." },
+            { id: 't3q9', question: "She was wise to save money for the future. (Rewrite using 'wisdom')", options: ["She showed wisdom by saving money for the future.", "Her wisdom was to save money for the future.", "She saved money for the future with wisdom."], correctAnswer: "She showed wisdom by saving money for the future." },
+            { id: 't3q10', question: "He left the house. At once, it started to rain. (Begin with 'No sooner...')", options: ["No sooner had he left the house than it started to rain.", "No sooner he had left the house than it started to rain.", "No sooner had he left the house when it started to rain."], correctAnswer: "No sooner had he left the house than it started to rain." },
+            { id: 't3q11', question: "He was very tired, but he managed to finish his work. (Rewrite using 'Despite')", options: ["Despite being very tired, he managed to finish his work.", "Despite he was very tired, he managed to finish his work.", "Despite tired, he managed to finish his work."], correctAnswer: "Despite being very tired, he managed to finish his work." },
+            { id: 't3q12', question: "The performance was cancelled by the organisers. (Begin with 'The organisers...')", options: ["The organisers were cancelling the performance.", "The organisers have cancelled the performance.", "The organisers cancelled the performance."], correctAnswer: "The organisers cancelled the performance." },
+            { id: 't3q13', question: "The team played badly. They lost the match. (Rewrite using 'so...that')", options: ["The team played so badly that they lost the match.", "The team played so bad that they lost the match.", "The team played badly so that they lost the match."], correctAnswer: "The team played so badly that they lost the match." },
+            { id: 't3q14', question: "She had just sat down to rest when the baby began to cry. (Begin with 'Scarcely...')", options: ["Scarcely had she sat down to rest than the baby began to cry.", "Scarcely she had sat down to rest when the baby began to cry.", "Scarcely had she sat down to rest when the baby began to cry."], correctAnswer: "Scarcely had she sat down to rest when the baby began to cry." },
+            { id: 't3q15', question: "If you do not apologise, she will not forgive you. (Rewrite using 'unless')", options: ["She will not forgive you unless you don't apologise.", "Unless she forgives you, you must apologise.", "She will not forgive you unless you apologise."], correctAnswer: "She will not forgive you unless you apologise." },
+            { id: 't3q16', question: "Her decision to quit was a surprise. (Rewrite using 'decided')", options: ["She surprised us when she decided to quit.", "She decided to quit with a surprise.", "Her surprise was when she decided to quit."], correctAnswer: "She surprised us when she decided to quit." },
+            { id: 't3q17', question: "He arrived at the station. The train left immediately. (Begin with 'Hardly...')", options: ["Hardly had he arrived at the station when the train left.", "Hardly he had arrived at the station when the train left.", "Hardly had he arrived at the station than the train left."], correctAnswer: "Hardly had he arrived at the station when the train left." },
+            { id: 't3q18', question: "\"Where did you go yesterday?\" my friend asked me. (Report the speech)", options: ["My friend asked me where did I go the day before.", "My friend asked me where I had gone the day before.", "My friend asked me where I went yesterday."], correctAnswer: "My friend asked me where I had gone the day before." },
+            { id: 't3q19', question: "The concert ended. The audience immediately gave a standing ovation. (Begin with 'No sooner...')", options: ["No sooner had the concert ended than the audience gave a standing ovation.", "No sooner had the concert ended when the audience gave a standing ovation.", "No sooner the concert had ended than the audience gave a standing ovation."], correctAnswer: "No sooner had the concert ended than the audience gave a standing ovation." },
+            { id: 't3q20', question: "The project was completed successfully by the team. (Begin with 'The team...')", options: ["The team successfully completed the project.", "The team completed the project successful.", "The team was successful in completing the project."], correctAnswer: "The team successfully completed the project." }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-indigo-500 hover:bg-indigo-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.textContent = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden'); 
+            feedbackText.innerHTML = `Correct Answer: <span class="font-bold">${correctAnswer}</span><br><span class="prompt-guidance">Click the correct answer (green) to continue.</span>`;
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect transformation! You're a sentence master!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your sentence-shaping skills are strong!";
+        else encouragementTextEl.textContent = "Good effort! More practice will perfect your technique.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Sentence Transformation' })
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
