@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Synthesis Techniques</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText,
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state #feedbackText .prompt-guidance {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+        }
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-green-200 via-cyan-200 to-blue-300 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-cyan-700">Welcome, Sentence Synthesizer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start combining sentences like a pro.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-cyan-500 focus:border-cyan-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-cyan-500 hover:bg-cyan-600 text-white w-full py-3 px-6 text-lg">Start Synthesizing!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-cyan-700 mb-2">Synthesis Techniques</h1>
+            <p class="text-slate-600 mb-8">Choose a set to master sentence combining.</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-cyan-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-cyan-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <p id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></p>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-cyan-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-cyan-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-cyan-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-amber-500 hover:bg-amber-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-cyan-500 hover:bg-cyan-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleGrammarFlashcardAppUserName_v4'; // New version key for new topic
+    // This is the link to YOUR Google Apps Script. It's already set.
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: Synthesis Techniques ---
+    const allFlashcardSets = {
+        "Set 1: Foundational Connectors": [
+            { id: 't1q1', question: "Combine: He was tired. He refused to stop working.", options: ["He was tired, but he refused to stop working.", "He was tired, so he refused to stop working.", "He was tired, and he refused to stop working."], correctAnswer: "He was tired, but he refused to stop working.", image: null },
+            { id: 't1q2', question: "Combine: The alarm clock rang. She did not wake up.", options: ["Although the alarm clock rang, she did not wake up.", "Because the alarm clock rang, she did not wake up.", "The alarm clock rang, so she did not wake up."], correctAnswer: "Although the alarm clock rang, she did not wake up.", image: null },
+            { id: 't1q3', question: "Combine: The boy saw a stray dog. The dog looked hungry.", options: ["The boy saw a stray dog that looked hungry.", "The boy saw a stray dog whose looked hungry.", "The boy saw a stray dog which he looked hungry."], correctAnswer: "The boy saw a stray dog that looked hungry.", image: null },
+            { id: 't1q4', "question": "Combine: You must study hard. You will not pass your exams.", "options": ["You must study hard or you will not pass your exams.", "You must study hard, but you will not pass your exams.", "You must study hard, so you will not pass your exams."], "correctAnswer": "You must study hard or you will not pass your exams.", "image": null },
+            { id: 't1q5', "question": "Combine: The librarian is very strict. She helps students find books.", "options": ["The librarian, who is very strict, helps students find books.", "The librarian which is very strict helps students find books.", "The librarian, that is very strict, helps students find books."], "correctAnswer": "The librarian, who is very strict, helps students find books.", "image": null },
+            { id: 't1q6', "question": "Combine: He could not go to the party. He was sick.", "options": ["He could not go to the party because he was sick.", "He was sick, although he could not go to the party.", "He could not go to the party since he was sick."], "correctAnswer": "He could not go to the party because he was sick.", "image": null },
+            { id: 't1q7', "question": "Combine: My neighbour's house is huge. Its gate is made of gold.", "options": ["My neighbour's house, whose gate is made of gold, is huge.", "My neighbour's house, which gate is made of gold, is huge.", "My neighbour's house, that its gate is made of gold, is huge."], "correctAnswer": "My neighbour's house, whose gate is made of gold, is huge.", "image": null },
+            { id: 't1q8', "question": "Combine: She has to finish her chores. She can watch television after that.", "options": ["She has to finish her chores before she can watch television.", "She can watch television while she finishes her chores.", "She has to finish her chores unless she can watch television."], "correctAnswer": "She has to finish her chores before she can watch television.", "image": null },
+            { id: 't1q9', "question": "Combine: The girl won the first prize. I was talking to her just now.", "options": ["The girl whom I was talking to just now won the first prize.", "The girl who I was talking to her just now won the first prize.", "The girl that I was talking to her just now won the first prize."], "correctAnswer": "The girl whom I was talking to just now won the first prize.", "image": null },
+            { id: 't1q10', "question": "Combine: He did not have a map. He managed to find his way.", "options": ["Despite not having a map, he managed to find his way.", "Because he did not have a map, he managed to find his way.", "He did not have a map, so he managed to find his way."], "correctAnswer": "Despite not having a map, he managed to find his way.", "image": null },
+            { id: 't1q11', "question": "Combine: The students were making a lot of noise. The teacher punished them.", "options": ["The teacher punished the students as they were making a lot of noise.", "The teacher punished the students although they were making noise.", "The students were making a lot of noise, but the teacher punished them."], "correctAnswer": "The teacher punished the students as they were making a lot of noise.", "image": null },
+            { id: 't1q12', "question": "Combine: That is the bakery. It sells the best cakes in town.", "options": ["That is the bakery which sells the best cakes in town.", "That is the bakery who sells the best cakes in town.", "That is the bakery whose sells the best cakes in town."], "correctAnswer": "That is the bakery which sells the best cakes in town.", "image": null },
+            { id: 't1q13', "question": "Combine: The movie was very long. It was also very boring.", "options": ["The movie was long and boring.", "The movie was long but boring.", "The movie was long so it was boring."], "correctAnswer": "The movie was long and boring.", "image": null },
+            { id: 't1q14', "question": "Combine: The park was closed. It was undergoing renovation.", "options": ["The park was closed since it was undergoing renovation.", "The park was closed, yet it was undergoing renovation.", "The park was closed while it was undergoing renovation."], "correctAnswer": "The park was closed since it was undergoing renovation.", "image": null },
+            { id: 't1q15', "question": "Combine: Mr Tan is the coach. His team won the championship.", "options": ["Mr Tan, whose team won the championship, is the coach.", "Mr Tan, who his team won the championship, is the coach.", "Mr Tan, that his team won the championship, is the coach."], "correctAnswer": "Mr Tan, whose team won the championship, is the coach.", "image": null },
+            { id: 't1q16', "question": "Combine: You should wear a helmet. You might get injured.", "options": ["You should wear a helmet, otherwise you might get injured.", "You should wear a helmet because you might get injured.", "You should wear a helmet, but you might get injured."], "correctAnswer": "You should wear a helmet, otherwise you might get injured.", "image": null },
+            { id: 't1q17', "question": "Combine: He will go for a run. The rain has to stop first.", "options": ["He will go for a run when the rain stops.", "He will go for a run if the rain will stop.", "He will go for a run so the rain stops."], "correctAnswer": "He will go for a run when the rain stops.", "image": null },
+            { id: 't1q18', "question": "Combine: The old man is a famous artist. He lives across the street.", "options": ["The old man who lives across the street is a famous artist.", "The old man which lives across the street is a famous artist.", "The old man whom lives across the street is a famous artist."], "correctAnswer": "The old man who lives across the street is a famous artist.", "image": null },
+            { id: 't1q19', "question": "Combine: She felt sick. She still went to school for her test.", "options": ["Although she felt sick, she still went to school for her test.", "She felt sick, so she still went to school for her test.", "She still went to school for her test because she felt sick."], "correctAnswer": "Although she felt sick, she still went to school for her test.", "image": null },
+            { id: 't1q20', "question": "Combine: The phone is very expensive. It has many advanced features.", "options": ["The phone is very expensive, yet it has many advanced features.", "The phone, which has many advanced features, is very expensive.", "The phone is very expensive, so it has many advanced features."], "correctAnswer": "The phone, which has many advanced features, is very expensive.", "image": null }
+        ],
+        "Set 2: Advanced Phrasing": [
+            { id: 't2q1', question: "Combine: He noticed the smoke. He immediately called the fire department.", "options": ["Noticing the smoke, he immediately called the fire department.", "He noticed the smoke, so he immediately called the fire department.", "Notice the smoke, he immediately called the fire department."], "correctAnswer": "Noticing the smoke, he immediately called the fire department.", "image": null },
+            { id: 't2q2', "question": "Combine: The boy worked hard. He wanted to win the scholarship.", "options": ["The boy worked hard to win the scholarship.", "The boy worked hard for winning the scholarship.", "The boy worked hard, and to win the scholarship."], "correctAnswer": "The boy worked hard to win the scholarship.", "image": null },
+            { id: 't2q3', "question": "Combine: She was exhausted from the hike. She fell asleep instantly.", "options": ["Exhausted from the hike, she fell asleep instantly.", "She was exhausted from the hike to fall asleep instantly.", "Exhausting from the hike, she fell asleep instantly."], "correctAnswer": "Exhausted from the hike, she fell asleep instantly.", "image": null },
+            { id: 't2q4', "question": "Combine: He was overweight. His doctor advised him to exercise regularly.", "options": ["The doctor advised him to exercise regularly due to his being overweight.", "In spite of being overweight, the doctor advised him to exercise.", "The doctor advised him to exercise regularly by being overweight."], "correctAnswer": "The doctor advised him to exercise regularly due to his being overweight.", "image": null },
+            { id: 't2q5', "question": "Combine: The team had trained for months. They were confident of winning.", "options": ["Having trained for months, the team was confident of winning.", "Training for months, the team was confident of winning.", "The team trained for months to be confident of winning."], "correctAnswer": "Having trained for months, the team was confident of winning.", "image": null },
+            { id: 't2q6', "question": "Combine: He went to the post office. He wanted to mail a letter.", "options": ["He went to the post office to mail a letter.", "He went to the post office for mailing a letter.", "He went to the post office, so he mailed a letter."], "correctAnswer": "He went to the post office to mail a letter.", "image": null },
+            { id: 't2q7', "question": "Combine: The thief was caught by the police. He was trying to escape.", "options": ["The thief was caught by the police while trying to escape.", "The thief trying to escape was caught by the police.", "Trying to escape, the thief was caught by the police."], "correctAnswer": "The thief was caught by the police while trying to escape.", "image": null },
+            { id: 't2q8', "question": "Combine: A new bridge must be built. This will connect the two villages.", "options": ["A new bridge must be built to connect the two villages.", "A new bridge must be built for connecting the two villages.", "Connecting the two villages, a new bridge must be built."], "correctAnswer": "A new bridge must be built to connect the two villages.", "image": null },
+            { id: 't2q9', "question": "Combine: The student forgot to bring his textbook. He was scolded by the teacher.", "options": ["Forgetting to bring his textbook, the student was scolded by the teacher.", "The student was scolded by the teacher to forget his textbook.", "The student forgot to bring his textbook, so he was scolded."], "correctAnswer": "Forgetting to bring his textbook, the student was scolded by the teacher.", "image": null },
+            { id: 't2q10', "question": "Combine: He lost his wallet. He was still in a cheerful mood.", "options": ["He was still in a cheerful mood despite losing his wallet.", "Losing his wallet, he was still in a cheerful mood.", "He was still in a cheerful mood because he lost his wallet."], "correctAnswer": "He was still in a cheerful mood despite losing his wallet.", "image": null },
+            { id: 't2q11', "question": "Combine: The girl was praised by her teacher. She had designed the beautiful poster.", "options": ["The girl was praised by her teacher for designing the beautiful poster.", "Designing the beautiful poster, the girl was praised by her teacher.", "The girl was praised by her teacher to design the beautiful poster."], "correctAnswer": "The girl was praised by her teacher for designing the beautiful poster.", "image": null },
+            { id: 't2q12', "question": "Combine: He opened the door quietly. He did not want to wake the baby.", "options": ["He opened the door quietly so as not to wake the baby.", "He opened the door quietly for not waking the baby.", "Opening the door quietly, he did not want to wake the baby."], "correctAnswer": "He opened the door quietly so as not to wake the baby.", "image": null },
+            { id: 't2q13', "question": "Combine: The book was written by a famous author. It became a bestseller.", "options": ["Written by a famous author, the book became a bestseller.", "The book, writing by a famous author, became a bestseller.", "The book became a bestseller to be written by a famous author."], "correctAnswer": "Written by a famous author, the book became a bestseller.", "image": null },
+            { id: 't2q14', "question": "Combine: The boy failed the test. He was disappointed.", "options": ["The boy was disappointed to have failed the test.", "The boy, failing the test, was disappointed.", "Failing the test, the boy was disappointed."], "correctAnswer": "The boy was disappointed to have failed thetest.", "image": null },
+            { id: 't2q15', "question": "Combine: She apologised for her mistake. This was the right thing to do.", "options": ["Apologising for her mistake was the right thing to do.", "To apologise for her mistake was the right thing to do.", "She apologised for her mistake, doing the right thing."], "correctAnswer": "Apologising for her mistake was the right thing to do.", "image": null },
+            { id: 't2q16', "question": "Combine: The children were excited. They were going to the theme park.", "options": ["The children were excited about going to the theme park.", "The children, going to the theme park, were excited.", "The children were excited to go to the theme park."], "correctAnswer": "The children were excited about going to the theme park.", "image": null },
+            { id: 't2q17', "question": "Combine: The building was damaged in the fire. It had to be demolished.", "options": ["Damaged in the fire, the building had to be demolished.", "Damaging in the fire, the building had to be demolished.", "The building was damaged in the fire to be demolished."], "correctAnswer": "Damaged in the fire, the building had to be demolished.", "image": null },
+            { id: 't2q18', "question": "Combine: He is very shy. He finds it difficult to make new friends.", "options": ["Being very shy, he finds it difficult to make new friends.", "He is very shy to find it difficult to make new friends.", "He is very shy, so he finds it difficult to make new friends."], "correctAnswer": "Being very shy, he finds it difficult to make new friends.", "image": null },
+            { id: 't2q19', "question": "Combine: He had not slept all night. He felt very tired during the exam.", "options": ["Having not slept all night, he felt very tired during the exam.", "Not sleeping all night, he felt very tired during the exam.", "He did not sleep all night to feel tired during the exam."], "correctAnswer": "Having not slept all night, he felt very tired during the exam.", "image": null },
+            { id: 't2q20', "question": "Combine: A path must be cleared. This will allow the villagers to escape.", "options": ["In order to allow the villagers to escape, a path must be cleared.", "A path must be cleared for allowing the villagers to escape.", "Clearing a path, the villagers must be allowed to escape."], "correctAnswer": "In order to allow the villagers to escape, a path must be cleared.", "image": null }
+        ],
+        "Set 3: Integrated Synthesis Challenge": [
+            { id: 't3q1', question: "Choose the best way to combine: The weather was bad. The plane could not take off.", "options": ["The plane could not take off owing to the bad weather.", "The weather was bad, but the plane could not take off.", "Despite the bad weather, the plane could not take off."], "correctAnswer": "The plane could not take off owing to the bad weather.", "image": null },
+            { id: 't3q2', "question": "Choose the best way to combine: She reached for the top shelf. She wanted to get a book.", "options": ["She reached for the top shelf to get a book.", "She reached for the top shelf, and getting a book.", "Getting a book, she reached for the top shelf."], "correctAnswer": "She reached for the top shelf to get a book.", "image": null },
+            { id: 't3q3', "question": "Choose the best way to combine: A lady was sent to the hospital. She had fainted.", "options": ["A lady who had fainted was sent to the hospital.", "A lady was sent to the hospital because she has fainted.", "Fainting, a lady was sent to the hospital."], "correctAnswer": "A lady who had fainted was sent to the hospital.", "image": null },
+            { id: 't3q4', "question": "Choose the best way to combine: He is a very wealthy man. He is not happy.", "options": ["Although he is a very wealthy man, he is not happy.", "He is a very wealthy man, so he is not happy.", "Because he is a very wealthy man, he is not happy."], "correctAnswer": "Although he is a very wealthy man, he is not happy.", "image": null },
+            { id: 't3q5', "question": "Choose the best way to combine: The boy was walking home. He found a lost wallet.", "options": ["While walking home, the boy found a lost wallet.", "The boy found a lost wallet to walk home.", "The boy was walking home, but he found a lost wallet."], "correctAnswer": "While walking home, the boy found a lost wallet.", "image": null },
+            { id: 't3q6', "question": "Choose the best way to combine: The team lost the match. They played very well.", "options": ["The team lost the match in spite of playing very well.", "The team lost the match because they played very well.", "Playing very well, the team lost the match."], "correctAnswer": "The team lost the match in spite of playing very well.", "image": null },
+            { id: 't3q7', "question": "Choose the best way to combine: The old woman crossed the road. She was helped by a kind boy.", "options": ["The old woman was helped by a kind boy to cross the road.", "Crossing the road, the old woman was helped by a kind boy.", "The old woman who was helped by a kind boy crossed the road."], "correctAnswer": "The old woman was helped by a kind boy to cross the road.", "image": null },
+            { id: 't3q8', "question": "Choose the best way to combine: He had already seen the movie. He did not want to watch it again.", "options": ["Having already seen the movie, he did not want to watch it again.", "He did not want to watch the movie again to see it already.", "He already saw the movie, but he did not want to watch it again."], "correctAnswer": "Having already seen the movie, he did not want to watch it again.", "image": null },
+            { id: 't3q9', "question": "Choose the best way to combine: The child was crying. His toy was broken.", "options": ["The child whose toy was broken was crying.", "The child was crying because his toy has been broken.", "The child was crying, which his toy was broken."], "correctAnswer": "The child whose toy was broken was crying.", "image": null },
+            { id: 't3q10', "question": "Choose the best way to combine: The police arrested the man. The man had robbed the bank.", "options": ["The police arrested the man who had robbed the bank.", "Robbing the bank, the police arrested the man.", "The man had robbed the bank, so the police arrested him."], "correctAnswer": "The police arrested the man who had robbed the bank.", "image": null },
+            { id: 't3q11', "question": "Choose the best way to combine: She woke up early. She did not want to be late.", "options": ["She woke up early so that she would not be late.", "She woke up early, but she did not want to be late.", "Waking up early, she did not want to be late."], "correctAnswer": "She woke up early so that she would not be late.", "image": null },
+            { id: 't3q12', "question": "Choose the best way to combine: The vase was a family heirloom. It was broken by the cat.", "options": ["The vase, which was a family heirloom, was broken by the cat.", "The vase was a family heirloom, but it was broken by the cat.", "The vase was broken by the cat, because it was a family heirloom."], "correctAnswer": "The vase, which was a family heirloom, was broken by the cat.", "image": null },
+            { id: 't3q13', "question": "Choose the best way to combine: He practises the piano every day. He wants to be a concert pianist.", "options": ["He practises the piano every day in order to be a concert pianist.", "Practising the piano every day, he wants to be a concert pianist.", "He practises the piano every day, and wants to be a concert pianist."], "correctAnswer": "He practises the piano every day in order to be a concert pianist.", "image": null },
+            { id: 't3q14', "question": "Choose the best way to combine: The athlete trained hard. She failed to win a medal.", "options": ["Despite training hard, the athlete failed to win a medal.", "Training hard, the athlete failed to win a medal.", "The athlete trained hard, so she failed to win a medal."], "correctAnswer": "Despite training hard, the athlete failed to win a medal.", "image": null },
+            { id: 't3q15', "question": "Choose the best way to combine: The project was completed ahead of schedule. The team worked tirelessly.", "options": ["As the team worked tirelessly, the project was completed ahead of schedule.", "The project was completed ahead of schedule, but the team worked tirelessly.", "Working tirelessly, the project was completed ahead of schedule by the team."], "correctAnswer": "As the team worked tirelessly, the project was completed ahead of schedule.", "image": null },
+            { id: 't3q16', "question": "Choose the best way to combine: The instructions were complicated. I could not assemble the shelf.", "options": ["The instructions were so complicated that I could not assemble the shelf.", "The instructions were too complicated for my assembling the shelf.", "I could not assemble the shelf, although the instructions were complicated."], "correctAnswer": "The instructions were so complicated that I could not assemble the shelf.", "image": null },
+            { id: 't3q17', "question": "Choose the best way to combine: The firefighter was awarded a medal. He had saved three people.", "options": ["The firefighter was awarded a medal for having saved three people.", "The firefighter, saving three people, was awarded a medal.", "The firefighter was awarded a medal, so he had saved three people."], "correctAnswer": "The firefighter was awarded a medal for having saved three people.", "image": null },
+            { id: 't3q18', "question": "Choose the best way to combine: The door was locked. I could not enter the room.", "options": ["As the door was locked, I could not enter the room.", "I could not enter the room despite the door was locked.", "Locking the door, I could not enter the room."], "correctAnswer": "As the door was locked, I could not enter the room.", "image": null },
+            { id: 't3q19', "question": "Choose the best way to combine: He put on his coat. He went out into the cold.", "options": ["Putting on his coat, he went out into the cold.", "He went out into the cold to put on his coat.", "He put on his coat, but he went out into the cold."], "correctAnswer": "Putting on his coat, he went out into the cold.", "image": null },
+            { id: 't3q20', "question": "Choose the best way to combine: The story was very touching. It made everyone cry.", "options": ["The story was so touching that it made everyone cry.", "The story was too touching to make everyone cry.", "The story was very touching, and it made everyone cry."], "correctAnswer": "The story was so touching that it made everyone cry.", "image": null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-cyan-500 hover:bg-cyan-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.textContent = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            feedbackText.innerHTML = `Correct Answer: <span class="font-bold">${correctAnswer}</span><br><span class="prompt-guidance">Click the correct answer (green) to continue.</span>`;
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Flawless synthesis! You are a master of sentence construction!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent connections! Your grammar skills are shining.";
+        else encouragementTextEl.textContent = "Good effort! Review the incorrect answers to become even better.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Synthesis Techniques' }) // Add subject
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
