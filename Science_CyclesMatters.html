@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Cycles in Matter & Water</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-emerald-200 via-teal-200 to-cyan-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-teal-700">Welcome, Science Explorer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on Cycles in Matter and Water.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-teal-500 focus:border-teal-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6 text-lg">Start Exploring!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-teal-700 mb-2">PSLE Science: Cycles</h1>
+            <p class="text-slate-600 mb-8">Choose a set to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-teal-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-teal-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-teal-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-teal-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-teal-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleScienceCyclesApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Cycles in Matter and Water ---
+    const allFlashcardSets = {
+        "Set 1: States of Matter & Basic Cycle": [
+            { id: 'cw1q1', question: "Everything that has mass and takes up space is called ___.", options: ["Energy", "Matter", "Light"], correctAnswer: "Matter", explanation: "Matter is the 'stuff' that makes up everything in the universe, including solids, liquids, and gases.", image: null },
+            { id: 'cw1q2', question: "Which of these is a solid?", options: ["Milk", "Air", "Ice cube"], correctAnswer: "Ice cube", explanation: "A solid, like an ice cube, has a fixed shape and volume. Milk is a liquid and air is a gas.", image: null },
+            { id: 'cw1q3', question: "The process of a liquid turning into a gas is called ___.", options: ["Condensation", "Evaporation", "Freezing"], correctAnswer: "Evaporation", explanation: "Evaporation happens when liquid water gains heat and changes into water vapour (a gas).", image: null },
+            { id: 'cw1q4', question: "What is the main source of energy that drives the water cycle?", options: ["The Moon", "Wind", "The Sun"], correctAnswer: "The Sun", explanation: "The Sun's heat provides the energy needed for water to evaporate, which is the first major step in the water cycle.", image: null },
+            { id: 'cw1q5', question: "When water vapour in the air cools down and turns back into liquid water, it is called ___.", options: ["Precipitation", "Condensation", "Evaporation"], correctAnswer: "Condensation", explanation: "Condensation is the opposite of evaporation. It's how clouds and dew are formed.", image: null },
+            { id: 'cw1q6', question: "The change from a solid to a liquid is called ___.", options: ["Melting", "Freezing", "Boiling"], correctAnswer: "Melting", explanation: "Melting occurs when a solid, like ice, absorbs heat and changes into a liquid, like water.", image: null },
+            { id: 'cw1q7', question: "Which of these is in a gaseous state?", options: ["Rain", "River", "Water vapour"], correctAnswer: "Water vapour", explanation: "Water vapour is the gas form of water. It is invisible, unlike clouds which are tiny liquid droplets.", image: null },
+            { id: 'cw1q8', question: "Rain, snow, or sleet falling from the clouds is called ___.", options: ["Collection", "Condensation", "Precipitation"], correctAnswer: "Precipitation", explanation: "Precipitation is any form of water that falls from the clouds to the Earth's surface.", image: null },
+            { id: 'cw1q9', question: "The process of a liquid changing to a solid is called ___.", options: ["Melting", "Freezing", "Boiling"], correctAnswer: "Freezing", explanation: "Freezing happens when a liquid loses heat. For example, water turns into ice at 0°C.", image: null },
+            { id: 'cw1q10', question: "What forms when water vapour in the sky condenses into tiny water droplets?", options: ["Wind", "Clouds", "Rainbows"], correctAnswer: "Clouds", explanation: "Clouds are large collections of very tiny water droplets or ice crystals that have condensed from water vapour.", image: null },
+            { id: 'cw1q11', question: "Which process in the water cycle involves water turning into water vapour?", options: ["Evaporation", "Precipitation", "Collection"], correctAnswer: "Evaporation", explanation: "During evaporation, the Sun heats up water in rivers, lakes, and oceans, turning it into water vapour.", image: null },
+            { id: 'cw1q12', question: "At what temperature does water boil and turn into steam?", options: ["0°C", "50°C", "100°C"], correctAnswer: "100°C", explanation: "Boiling is a rapid form of evaporation that happens at a specific temperature. For water, this is 100°C.", image: null },
+            { id: 'cw1q13', question: "Which state of matter takes the shape of its container and has a fixed volume?", options: ["Solid", "Liquid", "Gas"], correctAnswer: "Liquid", explanation: "A liquid flows to take the shape of its container but the amount (volume) of liquid stays the same.", image: null },
+            { id: 'cw1q14', question: "Where does water gather after it falls as rain? This stage is called ___.", options: ["Evaporation", "Collection", "Condensation"], correctAnswer: "Collection", explanation: "Collection is when water gathers in places like oceans, lakes, and rivers after precipitation.", image: null },
+            { id: 'cw1q15', question: "Which state of matter has no definite shape or volume, and spreads out to fill any container?", options: ["Solid", "Liquid", "Gas"], correctAnswer: "Gas", explanation: "Gas particles move freely and will spread out to fill the entire space they are in.", image: null },
+            { id: 'cw1q16', question: "Which process requires heat to be added to water?", options: ["Freezing", "Condensation", "Melting"], correctAnswer: "Melting", explanation: "Both melting and evaporation require heat energy to be absorbed by the water to change its state.", image: null },
+            { id: 'cw1q17', question: "Which process involves heat being lost from water vapour?", options: ["Boiling", "Evaporation", "Condensation"], correctAnswer: "Condensation", explanation: "For water vapour (a gas) to turn back into a liquid, it must lose or release heat energy.", image:null },
+            { id: 'cw1q18', question: "The water cycle is a ___ process.", options: ["Linear", "Short", "Continuous"], correctAnswer: "Continuous", explanation: "The water cycle has no start or end. Water is constantly moving and changing states in a continuous loop.", image: null },
+            { id: 'cw1q19', question: "A puddle of water disappearing on a hot day is an example of ___.", options: ["Condensation", "Evaporation", "Precipitation"], correctAnswer: "Evaporation", explanation: "The heat from the sun gives the water molecules enough energy to escape into the air as water vapour.", image: null },
+            { id: 'cw1q20', question: "At what temperature does pure water freeze into ice?", options: ["100°C", "0°C", "-10°C"], correctAnswer: "0°C", explanation: "0 degrees Celsius is the freezing point of water, where it changes from a liquid to a solid.", image: null }
+        ],
+        "Set 2: Processes & Applications": [
+            { id: 'cw2q1', question: "Which of the following will cause a wet cloth to dry the fastest?", options: ["Placing it in a cool room", "Placing it in a windy place", "Folding it up tightly"], correctAnswer: "Placing it in a windy place", explanation: "Wind increases the rate of evaporation by blowing away the water vapour near the cloth, allowing more water to evaporate.", image: null },
+            { id: 'cw2q2', question: "What is the main difference between evaporation and boiling?", options: ["Boiling happens faster", "Evaporation occurs only at 100°C", "Boiling occurs at a fixed temperature"], correctAnswer: "Boiling occurs at a fixed temperature", explanation: "Boiling happens throughout the liquid at a specific temperature (100°C for water), while evaporation happens only at the surface and can occur at any temperature.", image: null },
+            { id: 'cw2q3', question: "Why do your spectacles fog up when you enter a warm room from the cold outside?", options: ["Dust sticks to them", "Water vapour from the warm air condenses on the cold lenses", "The lenses are melting"], correctAnswer: "Water vapour from the warm air condenses on the cold lenses", explanation: "The warm, moist air touches the cold surface of your glasses, cools down, and the water vapour in it turns into tiny liquid water droplets.", image: null },
+            { id: 'cw2q4', question: "If you have two identical containers of water, one wide and one narrow, which will evaporate faster?", options: ["The narrow one", "The wide one", "They evaporate at the same rate"], correctAnswer: "The wide one", explanation: "A wider container has a larger exposed surface area, which allows more water molecules to escape into the air at the same time.", image: null },
+            { id: 'cw2q5', question: "When you dissolve 10g of sugar in 100g of water, what is the mass of the sugar solution?", options: ["100g", "90g", "110g"], correctAnswer: "110g", explanation: "Matter is conserved. The sugar doesn't disappear; its particles just mix with the water. The total mass is the mass of the water plus the mass of the sugar.", image: null },
+            { id: 'cw2q6', question: "Why is the water in rain not salty, even though most of Earth's water is in salty oceans?", options: ["Salt cannot turn into gas", "The clouds filter the salt", "Salt is too heavy to evaporate"], correctAnswer: "Salt is too heavy to evaporate", explanation: "During evaporation, only the water molecules turn into gas and rise. The salt and other minerals are left behind in the ocean.", image: null },
+            { id: 'cw2q7', question: "Seeing water droplets on the outside of a cold can of soda is an example of ___.", options: ["Leaking", "Evaporation", "Condensation"], correctAnswer: "Condensation", explanation: "Water vapour from the surrounding air comes into contact with the cold surface of the can, loses heat, and turns into liquid water droplets.", image: null },
+            { id: 'cw2q8', question: "Which process involves a GAIN of heat?", options: ["Water turning into ice", "Water vapour turning into clouds", "Ice turning into water"], correctAnswer: "Ice turning into water", explanation: "To change from a solid to a liquid (melting), a substance must absorb or gain heat energy.", image: null },
+            { id: 'cw2q9', question: "Clouds are made of ___.", options: ["Pure water vapour", "Smoke and dust", "Tiny water droplets or ice crystals"], correctAnswer: "Tiny water droplets or ice crystals", explanation: "Water vapour itself is an invisible gas. Clouds become visible because the vapour has condensed into tiny liquid droplets or frozen into ice crystals.", image: null },
+            { id: 'cw2q10', question: "Which process involves a LOSS of heat?", options: ["Water boiling into steam", "A puddle drying up", "Steam turning into liquid water"], correctAnswer: "Steam turning into liquid water", explanation: "To change from a gas to a liquid (condensation), a substance must release or lose heat energy.", image: null },
+            { id: 'cw2q11', question: "How do plants release water vapour into the atmosphere?", options: ["Through their roots", "Through a process called transpiration", "By absorbing rain"], correctAnswer: "Through a process called transpiration", explanation: "Transpiration is the process where plants absorb water through the roots and then give off water vapour through small pores in their leaves.", image: null },
+            { id: 'cw2q12', question: "What happens to the rate of evaporation as the temperature increases?", options: ["It decreases", "It increases", "It stays the same"], correctAnswer: "It increases", explanation: "Higher temperatures mean more heat energy is available, allowing water molecules to move faster and escape into the air more easily.", image: null },
+            { id: 'cw2q13', question: "If there were no dust particles in the air, what would be affected?", options: ["The rate of evaporation", "The formation of clouds", "The temperature of the sun"], correctAnswer: "The formation of clouds", explanation: "Water vapour needs tiny particles (like dust or pollen) to condense upon to form water droplets and clouds.", image: null },
+            { id: 'cw2q14', "question": "When you see your breath on a very cold day, what are you actually seeing?", "options": ["Carbon dioxide", "Smoke from your lungs", "Condensed water vapour from your breath"], "correctAnswer": "Condensed water vapour from your breath", "explanation": "Your warm, moist breath meets the cold air. The water vapour in your breath quickly cools and condenses into a visible cloud of tiny liquid water droplets.", "image": null},
+            { id: 'cw2q15', question: "Which of these is NOT a form of precipitation?", options: ["Rain", "Dew", "Snow"], correctAnswer: "Dew", explanation: "Dew is a form of condensation where water vapour from the air turns to liquid on cool surfaces (like grass) overnight. It does not fall from clouds.", image: null },
+            { id: 'cw2q16', question: "The water cycle is important because it ___.", options: ["Makes the oceans salty", "Cleans and distributes fresh water", "Causes day and night"], correctAnswer: "Cleans and distributes fresh water", explanation: "Evaporation naturally purifies water (leaving salts behind), and the cycle moves this fresh water all around the planet, making it available for living things.", image: null },
+            { id: 'cw2q17', question: "A sealed container with some water is left in the sun. What will happen inside?", options: ["The water will disappear forever", "Evaporation and condensation will occur", "Only evaporation will occur"], correctAnswer: "Evaporation and condensation will occur", explanation: "Water will evaporate into the space above it. As the water vapour touches the cooler top/sides of the container, it will condense back into liquid.", image: null },
+            { id: 'cw2q18', question: "Why does a piece of food dry out faster when it is cut into smaller pieces?", options: ["It loses mass", "It increases its exposed surface area", "It becomes hotter"], correctAnswer: "It increases its exposed surface area", explanation: "Cutting food into smaller pieces increases the total surface area exposed to the air, which speeds up the rate of evaporation of water from the food.", image: null },
+            { id: 'cw2q19', question: "How does rain form in clouds?", options: ["The sun heats the clouds", "Tiny water droplets bump into each other and combine", "The wind freezes the clouds"], correctAnswer: "Tiny water droplets bump into each other and combine", explanation: "Inside a cloud, millions of tiny water droplets collide and stick together, growing larger and heavier until they fall as rain.", image: null },
+            { id: 'cw2q20', question: "What state of matter is water in just before it freezes?", options: ["Solid", "Liquid", "Gas"], correctAnswer: "Liquid", explanation: "Freezing is the process of changing from the liquid state to the solid state. So, just before it freezes, water is a liquid at or very near 0°C.", image: null }
+        ],
+        "Set 3: Systems & Critical Thinking": [
+            { id: 'cw3q1', question: "A student places two identical wet towels under the sun. Towel A is spread out, while Towel B is folded. Which towel will dry first and why?", options: ["Towel B, because it is thicker", "Towel A, because it has a larger exposed surface area", "They will dry at the same time"], correctAnswer: "Towel A, because it has a larger exposed surface area", explanation: "Evaporation rate is affected by exposed surface area. The spread-out towel allows more water to be exposed to the air and sun, so it evaporates faster.", image: null },
+            { id: 'cw3q2', question: "If large forests are cut down (deforestation), how might this affect the water cycle in that area?", options: ["More precipitation", "Less precipitation", "No effect"], correctAnswer: "Less precipitation", explanation: "Trees release a lot of water vapour through transpiration. Fewer trees mean less water vapour in the air, which can lead to fewer clouds and less rainfall.", image: null },
+            { id: 'cw3q3', question: "If 100 grams of ice melts in a sealed container, what will be the mass of the water inside?", options: ["Less than 100g", "Exactly 100g", "More than 100g"], correctAnswer: "Exactly 100g", explanation: "This demonstrates the law of conservation of mass. Changing state from solid to liquid does not change the amount of matter, so the mass remains the same.", image: null },
+            { id: 'cw3q4', question: "A terrarium (a sealed glass container with plants and soil) is a model of the Earth's water cycle. Where does condensation occur in a terrarium?", options: ["In the soil", "On the plant leaves", "On the cool, inner surface of the glass"], correctAnswer: "On the cool, inner surface of the glass", explanation: "Water evaporates from the soil and transpires from plants. This water vapour rises and condenses into liquid droplets when it touches the cooler glass walls.", image: null },
+            { id: 'cw3q5', question: "Why is the water cycle considered a 'closed system' for Earth?", options: ["The water can never escape into space", "The amount of water on Earth remains roughly constant", "The cycle only happens in closed containers"], correctAnswer: "The amount of water on Earth remains roughly constant", explanation: "In a closed system, matter is recycled. The Earth doesn't get new water or lose significant amounts of it; the same water is just constantly recycled through the cycle.", image: null },
+            { id: 'cw3q6', question: "If global temperatures rise, what is a likely immediate effect on the water cycle?", options: ["A decrease in the rate of evaporation", "An increase in the rate of evaporation", "The freezing point of water will change"], correctAnswer: "An increase in the rate of evaporation", explanation: "Higher temperatures provide more energy for water to change from a liquid to a gas, leading to more water vapour in the atmosphere and potentially more intense weather.", image: null },
+            { id: 'cw3q7', question: "Pollutants from factories can cause acid rain. At what stage does the pollutant enter the water cycle?", options: ["During collection", "During condensation", "During evaporation"], correctAnswer: "During condensation", explanation: "Gases like sulfur dioxide from factories rise into the atmosphere, where they mix with water vapour as it condenses to form clouds and fall as acid rain.", image: null },
+            { id: 'cw3q8', question: "What is the key role of plants (transpiration) in the water cycle system?", options: ["They use up all the water", "They move water from the ground to the atmosphere", "They filter salt from water"], correctAnswer: "They move water from the ground to the atmosphere", explanation: "Transpiration is a major pathway for water to return to the atmosphere, acting like a natural water pump and contributing to cloud formation.", image: null },
+            { id: 'cw3q9', question: "On a humid day, a glass of ice water has lots of droplets on the outside. On a dry day, it has very few. Why?", options: ["The glass is less cold on a dry day", "There is less water vapour in the air on a dry day", "The ice melts faster on a humid day"], correctAnswer: "There is less water vapour in the air on a dry day", explanation: "The droplets come from condensation of water vapour from the air. Humid air has a lot of water vapour, so more condensation occurs. Dry air has little water vapour.", image: null },
+            { id: 'cw3q10', question: "If the Sun suddenly became much hotter, which two processes in the water cycle would speed up the most?", options: ["Freezing and Condensation", "Precipitation and Collection", "Evaporation and Transpiration"], correctAnswer: "Evaporation and Transpiration", explanation: "Both evaporation from water bodies and transpiration from plants are driven directly by the Sun's heat energy. More heat means these processes will happen much faster.", image: null },
+            { id: 'cw3q11', question: "Water boiling in a kettle and water evaporating from a lake are both a liquid turning to a gas. How do they differ in terms of energy input?", options: ["Evaporation does not require energy", "Boiling requires a much faster and more intense energy input", "They require the same energy"], correctAnswer: "Boiling requires a much faster and more intense energy input", explanation: "Boiling requires a continuous, strong heat source to happen rapidly at 100°C, while evaporation is a slower process that can happen at any temperature using ambient heat.", image: null },
+            { id: 'cw3q12', question: "What would happen to the water cycle if Earth had no atmosphere?", options: ["It would speed up", "It would stop", "It would not change"], correctAnswer: "It would stop", explanation: "The atmosphere is crucial. It holds the water vapour, allows clouds to form, and creates the pressure needed for liquid water to exist on the surface. Without it, water would just boil away into space.", image: null },
+            { id: 'cw3q13', question: "Why can you store salt for years in an open bowl, but a bowl of water will disappear?", options: ["Salt does not evaporate at room temperature", "Salt is a solid", "Salt is heavier than water"], correctAnswer: "Salt does not evaporate at room temperature", explanation: "The boiling/evaporation point of salt is extremely high (over 1400°C). At normal room temperatures, it has no tendency to turn into a gas, unlike water.", image: null },
+            { id: 'cw3q14', question: "How does the water cycle help to regulate temperatures around the world?", options: ["By blocking sunlight with clouds", "By moving heat from the equator to the poles", "By making water colder"], correctAnswer: "By moving heat from the equator to the poles", explanation: "Water evaporates in warm areas (absorbing heat) and is moved by winds. It then condenses and falls as rain in cooler areas (releasing that heat), helping distribute thermal energy.", image: null },
+            { id: 'cw3q15', question: "To get salt from salty water, you should ___ the water.", options: ["Freeze", "Condense", "Evaporate"], correctAnswer: "Evaporate", explanation: "When you evaporate the water (for example, by boiling it), the water turns into steam and leaves, while the dissolved salt is left behind as a solid.", image: null },
+            { id: 'cw3q16', question: "A sealed bottle is half-filled with water. If it is shaken, what happens to the total amount of water (liquid + vapour) inside?", options: ["It increases", "It decreases", "It stays the same"], correctAnswer: "It stays the same", explanation: "This is another example of conservation of matter in a closed system. Shaking might cause a little more evaporation, but the total number of water molecules inside the sealed bottle does not change.", image: null },
+            { id: 'cw3q17', question: "If rain falls on a non-porous surface like a road, what part of the water cycle is most likely to happen next?", options: ["Infiltration (soaking into ground)", "Transpiration", "Runoff (flowing over the surface)"], correctAnswer: "Runoff (flowing over the surface)", explanation: "Since the water cannot soak into the road, it will flow over the surface (runoff) and eventually collect in drains, rivers, or lakes.", image: null },
+            { id: 'cw3q18', "question": "Why does covering a pot of boiling water with a lid make it boil faster?", "options": ["The lid adds heat", "It traps heat and water vapour, increasing pressure", "The lid is heavy"], "correctAnswer": "It traps heat and water vapour, increasing pressure", "explanation": "The lid prevents heat from escaping and traps steam. This increases the pressure and temperature inside the pot, allowing the water to reach its boiling point more quickly.", "image": null},
+            { id: 'cw3q19', "question": "Which of these is NOT a direct part of the water cycle?", "options": ["Water evaporating from an ocean", "A plant absorbing water from the soil", "Water being used to generate electricity in a dam"], "correctAnswer": "Water being used to generate electricity in a dam", "explanation": "While dams are part of a river system (collection), the act of generating electricity is a human use of the water's potential energy, not a natural process of the cycle itself like evaporation or absorption by plants.", "image": null},
+            { id: 'cw3q20', "question": "If a major volcanic eruption fills the atmosphere with dust, what is a possible short-term effect on the water cycle?", "options": ["Global cooling and less evaporation", "Global warming and more evaporation", "No effect on the water cycle"], "correctAnswer": "Global cooling and less evaporation", "explanation": "The dust can block sunlight from reaching the Earth's surface. This would cause temporary cooling, which in turn would reduce the rate of evaporation, slowing down a key part of the water cycle.", "image": null}
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-teal-500 hover:bg-teal-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered this topic!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
