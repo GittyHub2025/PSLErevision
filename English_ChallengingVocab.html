@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE English Vocabulary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+            text-align: left;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+        .question-meaning { font-size: 0.8rem; font-style: italic; color: #475569; margin-top: 8px; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-purple-200 via-indigo-200 to-blue-300 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-indigo-700">Welcome, Word Wizard!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start building your vocabulary.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-indigo-500 focus:border-indigo-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-indigo-500 hover:bg-indigo-600 text-white w-full py-3 px-6 text-lg">Start Learning!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-indigo-700 mb-2">PSLE Vocabulary Builder</h1>
+            <p class="text-slate-600 mb-8">Choose a set to challenge your word power.</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-indigo-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-indigo-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-indigo-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-indigo-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-indigo-500 hover:bg-indigo-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleVocabApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD DATA: PSLE English Vocabulary ---
+    const vocabData = [
+        // Set 1
+        { word: "Meticulous", meaning: "Showing great attention to detail; very careful.", sentence: "The artist was ______ in her brushwork, ensuring every stroke was perfect." },
+        { word: "Ubiquitous", meaning: "Present, appearing, or found everywhere.", sentence: "With the rise of smartphones, Wi-Fi has become ______ in cafes and public spaces." },
+        { word: "Ephemeral", meaning: "Lasting for a very short time.", sentence: "The beauty of the cherry blossoms is ______, which makes their annual bloom so special." },
+        { word: "Gregarious", meaning: "Fond of company; sociable.", sentence: "Being a ______ person, she loved attending parties and meeting new people." },
+        { word: "Lethargic", meaning: "Sluggish and apathetic; lacking energy.", sentence: "After the huge feast, he felt too ______ to do anything but nap on the sofa." },
+        { word: "Ambiguous", meaning: "Open to more than one interpretation; unclear.", sentence: "The politician's ______ statement left voters wondering what he truly meant." },
+        { word: "Nefarious", meaning: "Wicked or criminal.", sentence: "The villain in the story hatched a ______ plot to take over the world." },
+        { word: "Ostentatious", meaning: "Designed to impress or attract notice; showy.", sentence: "He wore an ______ gold watch to show off his wealth." },
+        { word: "Pragmatic", meaning: "Dealing with things sensibly and realistically.", sentence: "The leader's ______ approach to the problem helped find a workable solution quickly." },
+        { word: "Ruminate", meaning: "To think deeply about something.", sentence: "She would often sit by the window and ______ on the events of the day." },
+        { word: "Serendipity", meaning: "The occurrence of events by chance in a happy way.", sentence: "It was pure ______ that they found the rare book in a small, forgotten shop." },
+        { word: "Tenacious", meaning: "Keeping a firm hold of something; determined.", sentence: "The ______ reporter refused to give up until she had the full story." },
+        { word: "Verbose", meaning: "Using or expressed in more words than are needed.", sentence: "His ______ explanation confused the students more than it helped them." },
+        { word: "Zealous", meaning: "Having or showing great energy or enthusiasm.", sentence: "The new recruit was ______ in his efforts to impress his boss." },
+        { word: "Benevolent", meaning: "Well meaning and kindly.", sentence: "The ______ king was loved by his subjects for his fairness and generosity." },
+        { word: "Candid", meaning: "Truthful and straightforward; frank.", sentence: "In her ______ interview, the actress spoke openly about her struggles." },
+        { word: "Diligent", meaning: "Showing care and conscientiousness in one's work.", sentence: "The ______ student reviewed his notes every night." },
+        { word: "Eloquent", meaning: "Fluent or persuasive in speaking or writing.", sentence: "His ______ speech about unity moved everyone in the audience." },
+        { word: "Formidable", meaning: "Inspiring fear or respect through being impressively powerful.", sentence: "The champion was a ______ opponent for the young challenger." },
+        { word: "Incessant", meaning: "Continuing without pause or interruption.", sentence: "The ______ sound of the construction work next door was very annoying." },
+        // Set 2
+        { word: "Juxtaposition", meaning: "The fact of two things being seen or placed close together with contrasting effect.", sentence: "The ______ of the old, historic building and the modern skyscraper was striking." },
+        { word: "Languid", meaning: "Displaying a disinclination for physical exertion; slow and relaxed.", sentence: "They enjoyed a ______ afternoon, lounging by the pool." },
+        { word: "Malleable", meaning: "Easily influenced; pliable.", sentence: "A young child's mind is ______, so it is important to teach them good values." },
+        { word: "Nostalgia", meaning: "A sentimental longing for a period in the past.", sentence: "Listening to the old songs filled him with ______ for his university days." },
+        { word: "Obfuscate", meaning: "To make something obscure, unclear, or unintelligible.", sentence: "The politician tried to ______ the issue with confusing jargon." },
+        { word: "Plethora", meaning: "A large or excessive amount of something.", sentence: "The library offers a ______ of books on every imaginable subject." },
+        { word: "Quintessential", meaning: "Representing the most perfect or typical example of a quality.", sentence: "Chicken rice is the ______ Singaporean dish that every tourist must try." },
+        { word: "Resilient", meaning: "Able to withstand or recover quickly from difficult conditions.", sentence: "Children are often more ______ than adults when it comes to adapting to change." },
+        { word: "Stoic", meaning: "Enduring pain and hardship without showing one's feelings.", sentence: "Despite the bad news, he remained ______ and did not show any emotion." },
+        { word: "Taciturn", meaning: "Reserved or uncommunicative in speech; saying little.", sentence: "The old farmer was a ______, man who only spoke when he had something important to say." },
+        { word: "Unprecedented", meaning: "Never done or known before.", sentence: "The sudden storm caused an ______ amount of flooding in the city." },
+        { word: "Abate", meaning: "To become less intense or widespread.", sentence: "As the storm began to ______, we could finally see the sun." },
+        { word: "Belligerent", meaning: "Hostile and aggressive.", sentence: "The customer became ______ and started shouting at the staff." },
+        { word: "Conundrum", meaning: "A confusing and difficult problem or question.", sentence: "The detective faced a difficult ______ with no clear clues." },
+        { word: "Debacle", meaning: "A sudden and ignominious failure; a fiasco.", sentence: "The poorly planned event turned into a complete ______." },
+        { word: "Ebullient", meaning: "Cheerful and full of energy.", sentence: "The ______ crowd cheered loudly when their team scored the winning goal." },
+        { word: "Furtive", meaning: "Attempting to avoid notice or attention; secretive.", sentence: "He cast a ______ glance in her direction, hoping she wouldn't see him." },
+        { word: "Garrulous", meaning: "Excessively talkative, especially on trivial matters.", sentence: "The ______ taxi driver talked non-stop throughout the entire journey." },
+        { word: "Hapless", meaning: "Unfortunate (especially of a person).", sentence: "The ______ tourist lost his wallet and passport on the first day of his trip." },
+        { word: "Iconoclast", meaning: "A person who attacks cherished beliefs or institutions.", sentence: "The artist was an ______ who challenged all traditional forms of art." },
+        // Set 3
+        { word: "Laconic", meaning: "Using very few words (of a person, speech, or style of writing).", sentence: "His ______ reply of 'fine' did little to explain what was wrong." },
+        { word: "Maverick", meaning: "An unorthodox or independent-minded person.", sentence: "The director was a ______ who broke all the rules of traditional filmmaking." },
+        { word: "Opaque", meaning: "Not able to be seen through; not transparent.", sentence: "The meaning of the poem was ______ and difficult to understand." },
+        { word: "Paradox", meaning: "A seemingly absurd or self-contradictory statement that may be true.", sentence: "It is a ______ that standing is more tiring than walking." },
+        { word: "Quell", meaning: "To put an end to (a rebellion or other disorder), typically by force.", sentence: "The prime minister made a speech to ______ the public's fears about the economy." },
+        { word: "Reticent", meaning: "Not revealing one's thoughts or feelings readily.", sentence: "She was very ______ about her past and refused to talk about it." },
+        { word: "Salient", meaning: "Most noticeable or important.", sentence: "He presented the ______ points of his argument clearly and concisely." },
+        { word: "Tenuous", meaning: "Very weak or slight.", sentence: "The lawyer's argument was based on a ______ link between the two events." },
+        { word: "Usurp", meaning: "To take (a position of power or importance) illegally or by force.", sentence: "The duke tried to ______ the king's throne while he was away." },
+        { word: "Vapid", meaning: "Offering nothing that is stimulating or challenging; bland.", sentence: "The conversation was ______ and filled with uninteresting small talk." },
+        { word: "Wane", meaning: "To decrease in vigour, power, or extent; become weaker.", sentence: "Her enthusiasm for the project began to ______ after weeks of no progress." },
+        { word: "Abhor", meaning: "To regard with disgust and hatred.", sentence: "As a pacifist, I ______ violence in all its forms." },
+        { word: "Banal", meaning: "So lacking in originality as to be obvious and boring.", sentence: "The movie's plot was ______ and predictable from the very beginning." },
+        { word: "Capricious", meaning: "Given to sudden and unaccountable changes of mood or behaviour.", sentence: "The ______ weather made it difficult to plan the outdoor picnic." },
+        { word: "Deride", meaning: "To express contempt for; ridicule.", sentence: "The other children would often ______ him for his unusual taste in music." },
+        { word: "Exacerbate", meaning: "To make (a problem, bad situation, or negative feeling) worse.", sentence: "Pouring water on the grease fire will only ______ the situation." },
+        { word: "Fastidious", meaning: "Very attentive to and concerned about accuracy and detail.", sentence: "He was ______ about his appearance, ensuring his clothes were always perfectly ironed." },
+        { word: "Gratuitous", meaning: "Done without good reason; uncalled for.", sentence: "The film was criticized for its ______ violence which did not add to the plot." },
+        { word: "Harangue", meaning: "A lengthy and aggressive speech.", sentence: "The coach delivered a fiery ______ to the team during half-time." },
+        { word: "Impeccable", meaning: "In accordance with the highest standards of propriety; faultless.", sentence: "The student's command of the English language was ______." }
+    ];
+
+    let allFlashcardSets = {};
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    // --- Dynamic Question Generation ---
+    function generateVocabularySets() {
+        const allWords = vocabData.map(v => v.word);
+        
+        const allQuizQuestions = vocabData.map((item, index) => {
+            const questionSentence = item.sentence.replace(new RegExp('\\b' + item.word + '\\b', 'i'), '______');
+            const questionHTML = `${questionSentence}<div class='question-meaning'>(Meaning: ${item.meaning})</div>`;
+            const correctAnswer = item.word;
+            const explanation = `E.g. ${item.sentence}`;
+
+            let wrongAnswers = [];
+            let tempWords = allWords.filter(w => w !== correctAnswer);
+            shuffleArray(tempWords);
+            wrongAnswers = tempWords.slice(0, 2);
+
+            const options = shuffleArray([correctAnswer, ...wrongAnswers]);
+
+            return {
+                id: `v${index + 1}`,
+                question: questionHTML,
+                options: options,
+                correctAnswer: correctAnswer,
+                explanation: explanation
+            };
+        });
+
+        const setSize = QUESTIONS_PER_SET;
+        allFlashcardSets = {
+            "PSLE Vocabulary Set 1": allQuizQuestions.slice(0, setSize),
+            "PSLE Vocabulary Set 2": allQuizQuestions.slice(setSize, setSize * 2),
+            "PSLE Vocabulary Set 3": allQuizQuestions.slice(setSize * 2, setSize * 3)
+        };
+    }
+    generateVocabularySets(); // Create the sets on script load
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+   
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= 1) { // Check if set is not empty
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-indigo-500 hover:bg-indigo-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy; 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.innerHTML = questionData.question;
+        
+        let displayOptions = [...questionData.options];
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden'); 
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Flawless vocabulary! You are a true wordsmith!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent word choices! Your vocabulary is impressive.";
+        else encouragementTextEl.textContent = "Good effort! Review the incorrect answers to become even better.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                const cleanQuestion = item.questionData.question.replace(/<div.*?>.*?<\/div>/, '').trim();
+                li.innerHTML = `<b>Q:</b> ${cleanQuestion}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question.replace(/<.*?>/g, ' '), u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'English' }) // Add subject
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
