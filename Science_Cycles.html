@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Cycles</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-emerald-200 via-teal-200 to-cyan-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-teal-700">Welcome, Science Explorer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on Cycles in Plants and Animals.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-teal-500 focus:border-teal-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6 text-lg">Start Exploring!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-teal-700 mb-2">PSLE Science: Cycles</h1>
+            <p class="text-slate-600 mb-8">Choose a topic to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-teal-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-teal-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-teal-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-teal-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-teal-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleScienceCyclesApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Cycles ---
+    const allFlashcardSets = {
+        "Set 1: Basic Life Cycles": [
+            { id: 'c1q1', question: "Which of these is the first stage in the life cycle of a butterfly?", options: ["Pupa", "Egg", "Larva"], correctAnswer: "Egg", explanation: "Most insect life cycles, including the butterfly's, begin with an egg.", image: null },
+            { id: 'c1q2', question: "The young of a frog is called a ___.", options: ["Nymph", "Caterpillar", "Tadpole"], correctAnswer: "Tadpole", explanation: "A tadpole hatches from a frog's egg and lives in water.", image: null },
+            { id: 'c1q3', question: "What is the correct order for a butterfly's 4-stage life cycle?", options: ["Egg -> Pupa -> Larva -> Adult", "Egg -> Larva -> Pupa -> Adult", "Egg -> Larva -> Adult -> Pupa"], correctAnswer: "Egg -> Larva -> Pupa -> Adult", explanation: "The butterfly undergoes complete metamorphosis in four distinct stages.", image: null },
+            { id: 'c1q4', question: "The process by which a seed starts to grow into a young plant is called ___.", options: ["Pollination", "Germination", "Fertilisation"], correctAnswer: "Germination", explanation: "Germination is the sprouting of a seed, which happens when conditions are right (water, oxygen, warmth).", image: null },
+            { id: 'c1q5', question: "Which part of a flower produces pollen?", options: ["Stigma", "Anther", "Ovary"], correctAnswer: "Anther", explanation: "The anther is part of the male reproductive organ (stamen) and contains the pollen grains.", image: null },
+            { id: 'c1q6', question: "A cockroach has a 3-stage life cycle. Its young is called a ___.", options: ["Larva", "Pupa", "Nymph"], correctAnswer: "Nymph", explanation: "In a 3-stage life cycle, the young (nymph) usually looks like a smaller version of the adult.", image: null },
+            { id: 'c1q7', question: "In a plant's life cycle, what comes after the adult plant stage?", options: ["Seedling", "Flower and fruit production", "Germination"], correctAnswer: "Flower and fruit production", explanation: "An adult plant produces flowers to reproduce, which then develop into fruits containing seeds for the next generation.", image: null },
+            { id: 'c1q8', question: "The transfer of pollen from the anther to the stigma is called ___.", options: ["Germination", "Pollination", "Dispersal"], correctAnswer: "Pollination", explanation: "Pollination is a crucial first step in the reproduction of flowering plants.", image: null },
+            { id: 'c1q9', question: "Which of these animals has a 4-stage life cycle?", options: ["Grasshopper", "Chicken", "Mosquito"], correctAnswer: "Mosquito", explanation: "A mosquito goes through egg, larva (wriggler), pupa, and adult stages, which is a 4-stage cycle.", image: null },
+            { id: 'c1q10', question: "What is the resting stage in a butterfly's life cycle called?", options: ["Pupa", "Nymph", "Tadpole"], correctAnswer: "Pupa", explanation: "The pupa is a non-feeding, inactive stage where the larva transforms into an adult.", image: null },
+            { id: 'c1q11', question: "How do mammals like cats and dogs reproduce?", options: ["By laying eggs", "By giving birth to live young", "By splitting into two"], correctAnswer: "By giving birth to live young", explanation: "Giving birth to live young and producing milk are key characteristics of mammals.", image: null },
+            { id: 'c1q12', question: "What does a tadpole use to breathe in water?", options: ["Lungs", "Gills", "Skin"], correctAnswer: "Gills", explanation: "Tadpoles are fully aquatic and have gills to extract oxygen from water, just like fish.", image: null },
+            { id: 'c1q13', question: "After a flower is successfully pollinated, what does the ovary develop into?", options: ["A leaf", "A fruit", "A root"], correctAnswer: "A fruit", explanation: "The ovary swells and ripens to become the fruit, which protects the seeds inside.", image: null },
+            { id: 'c1q14', question: "The young of a chicken looks like a smaller version of the adult. This means it has a ___ life cycle.", options: ["3-stage", "4-stage", "2-stage"], correctAnswer: "3-stage", explanation: "The life cycle is Egg -> Young -> Adult. The young (chick) resembles the adult, which is typical of a 3-stage cycle.", image: null },
+            { id: 'c1q15', question: "The purpose of reproduction is to ___.", options: ["allow the organism to grow bigger", "ensure the continuation of the species", "help the organism find food"], correctAnswer: "ensure the continuation of the species", explanation: "Reproduction creates new individuals, preventing a species from dying out.", image: null },
+            { id: 'c1q16', question: "The larva of a butterfly is also known as a ___.", options: ["Wriggler", "Caterpillar", "Maggot"], correctAnswer: "Caterpillar", explanation: "The caterpillar is the main feeding and growing stage in a butterfly's life.", image: null },
+            { id: 'c1q17', question: "Which of these is NOT needed for a seed to germinate?", options: ["Water", "Sunlight", "Warmth"], correctAnswer: "Sunlight", explanation: "A seed has stored food and does not need sunlight until it grows leaves to make its own food. It needs water, oxygen, and warmth.", image: null },
+            { id: 'c1q18', question: "Which part of the flower receives the pollen?", options: ["Petal", "Anther", "Stigma"], correctAnswer: "Stigma", explanation: "The stigma is the female part, and it is often sticky to trap pollen grains.", image: null },
+            { id: 'c1q19', question: "What hatches from a mosquito egg?", options: ["A nymph", "A wriggler (larva)", "A small mosquito"], correctAnswer: "A wriggler (larva)", explanation: "The mosquito larva, called a wriggler, lives in water before becoming a pupa.", image: null },
+            { id: 'c1q20', question: "The changes an organism goes through in its life is called its ___.", options: ["Daily routine", "Life cycle", "Food chain"], correctAnswer: "Life cycle", explanation: "A life cycle shows all the stages from birth to death and reproduction.", image: null }
+        ],
+        "Set 2: Processes & Comparisons": [
+            { id: 'c2q1', question: "What is the main difference between a 3-stage and a 4-stage life cycle?", options: ["The number of eggs laid", "The presence of a pupa stage", "Where the adult lives"], correctAnswer: "The presence of a pupa stage", explanation: "A 4-stage life cycle includes a pupa stage where major transformation occurs. A 3-stage cycle does not.", image: null },
+            { id: 'c2q2', question: "The fusion of the male reproductive cell with the female egg cell in a plant is called ___.", options: ["Pollination", "Germination", "Fertilisation"], correctAnswer: "Fertilisation", explanation: "Fertilisation happens after pollination and is the actual joining of cells to create a seed.", image: null },
+            { id: 'c2q3', question: "After fertilisation in a flower, what does the ovule develop into?", options: ["Fruit", "Seed", "Petal"], correctAnswer: "Seed", explanation: "The ovule contains the female egg cell. Once fertilised, it matures into a seed.", image: null },
+            { id: 'c2q4', question: "Why is seed dispersal important for plants?", options: ["To make the fruit taste better", "To reduce competition for resources", "To help the parent plant grow taller"], correctAnswer: "To reduce competition for resources", explanation: "If seeds fall near the parent, they compete for light, water, and nutrients, so scattering them is better.", image: null },
+            { id: 'c2q5', "question": "A plant has a fruit with a fibrous, waterproof husk. How are its seeds most likely dispersed?", "options": ["By wind", "By water", "By animals"], "correctAnswer": "By water", "explanation": "This describes a coconut, which floats on water to travel to new locations to grow." },
+            { id: 'c2q6', question: "Which of these correctly compares the young of a grasshopper and a butterfly?", options: ["Both are called nymphs", "Both look like the adult", "The grasshopper's young is a nymph, the butterfly's is a larva"], correctAnswer: "The grasshopper's young is a nymph, the butterfly's is a larva", explanation: "A grasshopper has a 3-stage cycle (nymph), while a butterfly has a 4-stage cycle (larva).", image: null },
+            { id: 'c2q7', question: "What is a characteristic of a flower that is pollinated by insects?", options: ["Small, dull petals", "No scent", "Large, colourful petals"], correctAnswer: "Large, colourful petals", explanation: "Bright colours and sweet nectar attract insects like bees and butterflies to help with pollination.", image: null },
+            { id: 'c2q8', question: "The young in a 4-stage life cycle often eats different food from the adult. What is the advantage of this?", options: ["It makes the young grow faster", "It reduces competition for food", "It helps the adult find a mate"], correctAnswer: "It reduces competition for food", explanation: "For example, a caterpillar eats leaves while a butterfly drinks nectar, so they don't compete.", image: null },
+            { id: 'c2q9', question: "How does reproduction in a fern differ from reproduction in a mango tree?", options: ["Ferns use spores, mango trees use seeds", "Ferns have flowers, mango trees do not", "Ferns live for a shorter time"], correctAnswer: "Ferns use spores, mango trees use seeds", explanation: "Ferns are non-flowering plants that reproduce with tiny spores, while mango trees are flowering plants that produce seeds inside fruits.", image: null },
+            { id: 'c2q10', question: "What is the difference between pollination and fertilisation?", options: ["They are the same process", "Pollination is the transfer of pollen, fertilisation is the fusion of cells", "Fertilisation happens before pollination"], correctAnswer: "Pollination is the transfer of pollen, fertilisation is the fusion of cells", explanation: "Pollination is the first step that makes the second step, fertilisation, possible.", image: null },
+            { id: 'c2q11', question: "A seed that has wing-like structures, like the shorea fruit, is dispersed by ___.", options: ["Splitting", "Wind", "Water"], correctAnswer: "Wind", explanation: "The 'wings' help the seed to spin and glide in the wind, carrying it far from the parent tree.", image: null },
+            { id: 'c2q12', question: "Which two animal groups typically lay eggs with hard shells?", options: ["Birds and Reptiles", "Mammals and Birds", "Amphibians and Fish"], correctAnswer: "Birds and Reptiles", explanation: "Birds lay hard-shelled eggs, while most reptiles lay eggs with tough, leathery shells. Both types protect the embryo on land.", image: null },
+            { id: 'c2q13', question: "In a bean plant's life cycle, which stage follows the seedling stage?", options: ["Seed stage", "Adult plant stage", "Flower stage"], correctAnswer: "Adult plant stage", explanation: "The seedling grows and matures into an adult plant, which can then produce flowers.", image: null },
+            { id: 'c2q14', question: "What is a key difference between the life cycle of a frog and a chicken?", options: ["A frog lays eggs, a chicken gives live birth", "A frog undergoes metamorphosis, a chicken does not", "A frog is an insect, a chicken is a bird"], correctAnswer: "A frog undergoes metamorphosis, a chicken does not", explanation: "A tadpole is very different from an adult frog (metamorphosis). A chick is a mini version of an adult chicken.", image: null },
+            { id: 'c2q15', question: "Cross-pollination is the transfer of pollen between...", options: ["the anther and stigma of the same flower.", "the anther and stigma of different flowers.", "the petal and the sepal."], correctAnswer: "the anther and stigma of different flowers.", explanation: "Cross-pollination, often by wind or insects, increases genetic diversity in plants.", image: null },
+            { id: 'c2q16', question: "Some fruits, like the balsam, have pods that split open explosively. This is a method of dispersal by ___.", options: ["Animals", "Wind", "Splitting / Explosive action"], correctAnswer: "Splitting / Explosive action", explanation: "This forceful action flings the seeds away from the parent plant.", image: null },
+            { id: 'c2q17', question: "What is the primary function of a fruit?", options: ["To make food for the plant", "To attract insects for pollination", "To protect and disperse the seeds"], correctAnswer: "To protect and disperse the seeds", explanation: "The fruit acts as a protective container and often helps in scattering the seeds for the next generation.", image: null },
+            { id: 'c2q18', question: "Compare the eggs of a fish and a frog.", options: ["Fish eggs have hard shells, frog eggs do not", "Both are laid in water and have no shell", "Frog eggs are laid on land, fish eggs in water"], correctAnswer: "Both are laid in water and have no shell", explanation: "Both amphibians and most fish lay large numbers of soft, shell-less eggs in water.", image: null },
+            { id: 'c2q19', "question": "The pupa of a mosquito is called a 'tumbler'. Where does this stage occur?", "options": ["On a leaf", "In the soil", "In water"], "correctAnswer": "In water", "explanation": "Both the larva (wriggler) and pupa (tumbler) stages of a mosquito's life cycle are aquatic." },
+            { id: 'c2q20', question: "Which method of reproduction leads to greater variety in the offspring?", options: ["Reproduction from spores", "Reproduction from seeds (sexual)", "Reproduction from a leaf cutting"], correctAnswer: "Reproduction from seeds (sexual)", explanation: "Sexual reproduction combines genes from two parents (via pollination), creating unique offspring. The others are forms of asexual reproduction.", image: null }
+        ],
+        "Set 3: Application & Critical Thinking": [
+            { id: 'c3q1', question: "A farmer finds his apple trees have flowers but produce very few apples. A lack of which of these is the most likely cause?", options: ["Sunlight", "Bees", "Water"], correctAnswer: "Bees", explanation: "Apple trees need insects like bees for pollination. No pollination means no fertilisation, so the flowers will not develop into fruits (apples).", image: null },
+            { id: 'c3q2', question: "Why is clearing away stagnant water an effective way to control the mosquito population?", options: ["Adult mosquitoes cannot swim", "It destroys the egg, larva, and pupa stages", "It makes the area too dry for adults"], correctAnswer: "It destroys the egg, larva, and pupa stages", explanation: "This breaks the mosquito life cycle by removing the habitat required for its first three stages.", image: null },
+            { id: 'c3q3', question: "A plant has small, dull flowers with no petals or scent. How is it most likely pollinated?", options: ["By birds", "By wind", "By bats"], correctAnswer: "By wind", explanation: "The plant doesn't need to waste energy on attractive features like petals or nectar because it relies on the wind to carry its pollen.", image: null },
+            { id: 'c3q4', question: "Why do animals like frogs and fish lay thousands of eggs at once?", options: ["Because they are very small", "To ensure at least some survive from predators", "To make the water cloudy"], correctAnswer: "To ensure at least some survive from predators", explanation: "This is a survival strategy. With no parental care, laying many eggs increases the chance that a few will survive to adulthood.", image: null },
+            { id: 'c3q5', question: "The caterpillar of a butterfly and the nymph of a grasshopper both moult. Why do they need to do this?", options: ["To change colour", "To grow bigger, as their exoskeleton is fixed", "To prepare for flying"], correctAnswer: "To grow bigger, as their exoskeleton is fixed", explanation: "They have a hard outer shell (exoskeleton) that cannot grow, so they must shed it periodically to increase in size.", image: null },
+            { id: 'c3q6', question: "A plant has a fruit that is fleshy, sweet-smelling, and brightly coloured. What is its dispersal agent?", options: ["Wind", "Water", "Animals"], correctAnswer: "Animals", explanation: "These features are designed to attract animals, which eat the fruit and pass the undigested seeds out elsewhere.", image: null },
+            { id: 'c3q7', question: "A farmer sprays a pesticide that only kills caterpillars. What is the long-term effect on the butterfly population in his farm?", options: ["It will increase", "It will not change", "It will decrease"], correctAnswer: "It will decrease", explanation: "By killing the larva (caterpillar), the life cycle is broken, and no new adult butterflies can be produced.", image: null },
+            { id: 'c3q8', question: "What is a major advantage of a 4-stage life cycle (like a butterfly's) over a 3-stage one (like a cockroach's)?", options: ["It is a faster cycle", "The larva and adult do not compete for the same food", "The pupa can defend itself better"], correctAnswer: "The larva and adult do not compete for the same food", explanation: "Caterpillars eat leaves and butterflies drink nectar. This separation of food sources means the young don't compete with the adults.", image: null },
+            { id: 'c3q9', "question": "Why must amphibians like frogs return to water to reproduce?", "options": ["Adult frogs cannot breathe on land", "Their eggs lack a shell and would dry out on land", "Their main food source is in the water"], "correctAnswer": "Their eggs lack a shell and would dry out on land", "explanation": "Amphibian eggs are soft and must be kept moist. Also, their young (tadpoles) are aquatic and need water to survive." },
+            { id: 'c3q10', "question": "How does parental care in birds give their offspring a higher chance of survival compared to the offspring of a butterfly?", "options": ["Bird eggs are bigger", "Birds protect and feed their young", "Birds can fly away from danger"], "correctAnswer": "Birds protect and feed their young", "explanation": "Butterflies lay eggs and leave. Birds incubate eggs and feed the chicks until they are independent, greatly increasing survival rates." },
+            { id: 'c3q11', question: "A seed is found to have germinated in a dark cupboard. It is tall and pale. Why?", options: ["It is sick", "It grew quickly using stored food to find light", "It needs more water"], correctAnswer: "It grew quickly using stored food to find light", explanation: "This is called etiolation. The plant uses all its energy from the seed to grow towards any potential light source before it can start making its own food.", image: null },
+            { id: 'c3q12', question: "If a plant species could only self-pollinate, what would be a long-term disadvantage?", options: ["It would produce fewer seeds", "It would lead to less genetic variation", "It would not be able to make fruit"], correctAnswer: "It would lead to less genetic variation", explanation: "Less variation makes a species more vulnerable to being wiped out by a single disease or environmental change.", image: null },
+            { id: 'c3q13', question: "A coconut palm on a remote island is identical to those on a mainland a thousand kilometres away. How is this possible?", options: ["Birds carried the seeds", "The seeds floated across the ocean", "People planted them there"], correctAnswer: "The seeds floated across the ocean", explanation: "The coconut's ability to float for long periods in salt water is an adaptation for dispersal by water currents.", image: null },
+            { id: 'c3q14', "question": "Why is the pupal stage both a time of great change and great vulnerability?", "options": ["It is when it learns to fly", "It cannot move to escape predators while it transforms", "It needs to eat a lot of food"], "correctAnswer": "It cannot move to escape predators while it transforms", "explanation": "The pupa is immobile and defenseless, relying only on its camouflage to survive while its entire body structure is reorganized." },
+            { id: 'c3q15', question: "What is the key difference between how mammals and birds keep their developing young warm?", options: ["Birds sit on their eggs, mammals carry young internally", "Mammals build nests, birds do not", "Bird eggs are warmer than mammal bodies"], correctAnswer: "Birds sit on their eggs, mammals carry young internally", explanation: "Birds use external incubation (sitting on eggs). Most mammals use internal gestation (pregnancy), keeping the embryo warm and safe inside the mother's body.", image: null },
+            { id: 'c3q16', question: "A plant's seed is covered in stiff hooks. This adaptation suggests it is dispersed by...", options: ["Wind", "Water", "Attaching to animal fur"], correctAnswer: "Attaching to animal fur", explanation: "The hooks are designed to catch onto the fur of passing animals, which then carry the seed to a new location before it falls off.", image: null },
+            { id: 'c3q17', question: "If the anthers were removed from a flower, it could still produce fruit if...", options: ["it is watered regularly.", "it receives pollen from another flower.", "it gets enough sunlight."], correctAnswer: "it receives pollen from another flower.", explanation: "The flower can no longer produce its own pollen but its female parts (stigma, ovary) can still function if cross-pollinated.", image: null },
+            { id: 'c3q18', "question": "Compare the function of a seed's coat with the shell of a chicken's egg.", "options": ["Both provide food for the young", "Both serve as a protective outer layer", "Both help the young to breathe"], "correctAnswer": "Both serve as a protective outer layer", "explanation": "The seed coat protects the embryo in the seed, while the eggshell protects the embryo in the egg. Both serve a similar protective function." },
+            { id: 'c3q19', question: "A gardener takes a cutting from a hibiscus plant and it grows into a new plant. This new plant will be...", options: ["genetically different from the parent.", "genetically identical to the parent.", "unable to produce flowers."], correctAnswer: "genetically identical to the parent.", explanation: "This is a form of asexual reproduction. Since it comes from only one parent, it is a clone and has the exact same genetic material.", image: null },
+            { id: 'c3q20', question: "For the life cycle of a flowering plant to be completed, both pollination and ___ must occur.", options: ["seed dispersal", "germination", "fertilisation"], correctAnswer: "seed dispersal", explanation: "The cycle is only truly complete when the next generation has a chance to grow. Fertilisation creates the seed, but dispersal gives that seed a chance to germinate and continue the cycle.", image: null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-teal-500 hover:bg-teal-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered this topic!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
