@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Math: Rate, Speed & Algebra</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-sky-200 via-blue-200 to-indigo-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-blue-700">Welcome, Math Whiz!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on Rate, Speed & Algebra.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-blue-500 focus:border-blue-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-blue-500 hover:bg-blue-600 text-white w-full py-3 px-6 text-lg">Start Solving!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-blue-700 mb-2">PSLE Math Practice</h1>
+            <p class="text-slate-600 mb-8">Choose a topic set to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-blue-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-blue-700 mb-4"></h2>
+
+            <div class="bg-blue-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-blue-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-blue-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-blue-500 hover:bg-blue-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleMathApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Math - Rate, Speed & Algebra ---
+    const allFlashcardSets = {
+        "Set 1: Advanced Concepts": [
+            { id: 'm1q1', question: "A car travels 240 km in 3 hours. What is its average speed?", options: ["60 km/h", "80 km/h", "720 km/h"], correctAnswer: "80 km/h", explanation: "Speed = Distance ÷ Time. So, Speed = 240 km ÷ 3 h = 80 km/h." },
+            { id: 'm1q2', question: "Find the value of 3y - 5 when y = 4.", options: ["7", "12", "2"], correctAnswer: "7", explanation: "Substitute y = 4 into the expression: 3 × (4) - 5 = 12 - 5 = 7." },
+            { id: 'm1q3', question: "A tap fills a 50-litre tank in 10 minutes. What is the rate of water flowing from the tap?", options: ["5 litres/min", "0.2 litres/min", "500 litres/min"], correctAnswer: "5 litres/min", explanation: "Rate = Total Volume ÷ Time. So, Rate = 50 litres ÷ 10 min = 5 litres/min." },
+            { id: 'm1q4', question: "A train travels at a constant speed of 90 km/h. How far will it travel in 2.5 hours?", options: ["225 km", "36 km", "180 km"], correctAnswer: "225 km", explanation: "Distance = Speed × Time. So, Distance = 90 km/h × 2.5 h = 225 km." },
+            { id: 'm1q5', question: "Simplify the expression: 4a + 7 - 2a + 3.", options: ["6a + 10", "2a + 4", "2a + 10"], correctAnswer: "2a + 10", explanation: "Group the like terms together: (4a - 2a) + (7 + 3) = 2a + 10." },
+            { id: 'm1q6', question: "How long does it take to travel 350 km at an average speed of 70 km/h?", options: ["5 hours", "4 hours", "6 hours"], correctAnswer: "5 hours", explanation: "Time = Distance ÷ Speed. So, Time = 350 km ÷ 70 km/h = 5 hours." },
+            { id: 'm1q7', question: "If x = 5, what is the value of 10x / 2?", options: ["10", "50", "25"], correctAnswer: "25", explanation: "Substitute x = 5 into the expression: (10 × 5) / 2 = 50 / 2 = 25." },
+            { id: 'm1q8', question: "Ali can type 240 words in 4 minutes. What is his typing rate in words per minute?", options: ["60 wpm", "80 wpm", "960 wpm"], correctAnswer: "60 wpm", explanation: "Rate = Total Words ÷ Time. So, Rate = 240 words ÷ 4 min = 60 words per minute (wpm)." },
+            { id: 'm1q9', question: "Solve for m: m + 8 = 15.", options: ["m = 23", "m = 7", "m = 1.875"], correctAnswer: "m = 7", explanation: "To find m, subtract 8 from both sides of the equation: 15 - 8 = 7. So, m = 7." },
+            { id: 'm1q10', question: "A cyclist travels 15 km in 30 minutes. What is her speed in km/h?", options: ["30 km/h", "15 km/h", "45 km/h"], correctAnswer: "30 km/h", explanation: "First, convert time to hours: 30 minutes = 0.5 hours. Then, Speed = Distance ÷ Time = 15 km ÷ 0.5 h = 30 km/h." },
+            { id: 'm1q11', question: "A pen costs $p. A book costs $5 more than the pen. What is the cost of the book?", options: ["p - 5", "5p", "p + 5"], correctAnswer: "p + 5", explanation: "The cost of the book is the pen's price (p) plus an additional $5, which is written as p + 5." },
+            { id: 'm1q12', question: "A printer prints 90 pages in 6 minutes. How many pages can it print in 1 minute?", options: ["15 pages", "10 pages", "540 pages"], correctAnswer: "15 pages", explanation: "Rate = Total Pages ÷ Time. So, Rate = 90 pages ÷ 6 min = 15 pages per minute." },
+            { id: 'm1q13', question: "Solve for k: 4k = 36.", options: ["k = 9", "k = 32", "k = 144"], correctAnswer: "k = 9", explanation: "To find k, divide both sides of the equation by 4: 36 ÷ 4 = 9. So, k = 9." },
+            { id: 'm1q14', question: 'A bus travels from Town A to Town B, a distance of 180 km, in 4 hours. It then travels from Town B to Town C, a distance of 120 km, in 2 hours. What is the average speed for the whole journey?', options: ['50 km/h', '47.5 km/h', '55 km/h'], correctAnswer: '50 km/h', explanation: 'Average speed = Total Distance / Total Time. Total Distance = 180 + 120 = 300 km. Total Time = 4 + 2 = 6 hours. Average Speed = 300 km / 6 h = 50 km/h.' },
+            { id: 'm1q15', question: "What is the expression for '10 less than a number k'?", options: ["10 - k", "k - 10", "10k"], correctAnswer: "k - 10", explanation: "'10 less than k' means you start with k and subtract 10. So, the expression is k - 10." },
+            { id: 'm1q16', question: "A snail moves at 2 cm/s. How long will it take to cross a 50 cm path?", options: ["100 s", "25 s", "0.04 s"], correctAnswer: "25 s", explanation: "Time = Distance ÷ Speed. Time = 50 cm ÷ 2 cm/s = 25 seconds." },
+            { id: 'm1q17', question: "If b = 6, what is the value of (b + 4) / 5?", options: ["2", "10", "1"], correctAnswer: "2", explanation: "Substitute b = 6 into the expression: (6 + 4) / 5 = 10 / 5 = 2." },
+            { id: 'm1q18', question: "A factory produces 600 toys in 8 hours. What is the production rate in toys per hour?", options: ["4800 toys/hr", "75 toys/hr", "13.3 toys/hr"], correctAnswer: "75 toys/hr", explanation: "Rate = Total Toys ÷ Time. Rate = 600 toys ÷ 8 hours = 75 toys per hour." },
+            { id: 'm1q19', question: "Solve for x: x / 3 = 7.", options: ["x = 21", "x = 10", "x = 2.33"], correctAnswer: "x = 21", explanation: "To find x, multiply both sides of the equation by 3: 7 × 3 = 21. So, x = 21." },
+            { id: 'm1q20', question: "A runner's speed is 5 m/s. How far can he run in 1 minute?", options: ["30 m", "5 m", "300 m"], correctAnswer: "300 m", explanation: "First, convert time to seconds: 1 minute = 60 seconds. Then, Distance = Speed × Time = 5 m/s × 60 s = 300 metres." }
+        ],
+        "Set 2: Deeper Understanding & Critical Thinking": [
+            { id: 'm2q1', question: "A car travels to Town A at 60 km/h for 2 hours and returns by the same route at 40 km/h. What is the average speed for the entire journey?", options: ["50 km/h", "48 km/h", "52 km/h"], correctAnswer: "48 km/h", explanation: "Distance to Town A = 60 km/h × 2 h = 120 km. Time for return trip = 120 km ÷ 40 km/h = 3 h. Total distance = 120 + 120 = 240 km. Total time = 2 + 3 = 5 h. Average speed = 240 km ÷ 5 h = 48 km/h." },
+            { id: 'm2q2', question: "Solve for y: 3y - 7 = 14.", options: ["y = 7", "y = 5", "y = 9"], correctAnswer: "y = 7", explanation: "First, add 7 to both sides: 3y = 14 + 7 = 21. Then, divide both sides by 3: y = 21 ÷ 3 = 7." },
+            { id: 'm2q3', question: "Tap A fills a tank at 4 L/min and Tap B fills it at 6 L/min. If both taps are turned on, how long will it take to fill a 120-litre tank?", options: ["12 min", "20 min", "30 min"], correctAnswer: "12 min", explanation: "Combined rate = 4 L/min + 6 L/min = 10 L/min. Time = Total Volume ÷ Combined Rate = 120 L ÷ 10 L/min = 12 minutes." },
+            { id: 'm2q4', question: "Siti had $m. She bought 4 notebooks that cost $3 each and had $10 left. Find the value of m.", options: ["m = 22", "m = 17", "m = 14"], correctAnswer: "m = 22", explanation: "Cost of notebooks = 4 × $3 = $12. The initial amount m is the cost plus the amount left over. So, m = $12 + $10 = $22." },
+            { id: 'm2q5', question: "A train 200 m long travels at 30 m/s. How long does it take to completely pass a 400 m long platform?", options: ["6.7 s", "13.3 s", "20 s"], correctAnswer: "20 s", explanation: "The total distance the train must travel is its own length plus the platform's length: 200 m + 400 m = 600 m. Time = Distance ÷ Speed = 600 m ÷ 30 m/s = 20 seconds." },
+            { id: 'm2q6', question: "A pen costs $p. A book costs $5 more than the pen. What is the total cost of 2 pens and 1 book in terms of p?", options: ["2p + 5", "3p + 5", "p + 7"], correctAnswer: "3p + 5", explanation: "Cost of 2 pens = 2 × p = 2p. Cost of 1 book = p + 5. Total cost = 2p + (p + 5) = 3p + 5." },
+            { id: 'm2q7', question: "Machine A makes 100 cookies in 10 min. Machine B makes 120 cookies in 15 min. Which machine is faster and by how much?", options: ["A by 2 cookies/min", "B by 2 cookies/min", "They are the same"], correctAnswer: "A by 2 cookies/min", explanation: "Rate of A = 100/10 = 10 cookies/min. Rate of B = 120/15 = 8 cookies/min. Machine A is faster by 10 - 8 = 2 cookies/min." },
+            { id: 'm2q8', question: "The sum of three consecutive odd numbers is 57. What is the largest of these numbers?", options: ["19", "21", "17"], correctAnswer: "21", explanation: "Let the numbers be n, n+2, n+4. So, n + (n+2) + (n+4) = 57. 3n + 6 = 57. 3n = 51. n = 17. The numbers are 17, 19, 21. The largest is 21." },
+            { id: 'm2q9', question: "A car travels at 80 km/h for 45 minutes. How far did it travel?", options: ["60 km", "80 km", "3600 km"], correctAnswer: "60 km", explanation: "Convert time to hours: 45 minutes = 45/60 = 0.75 hours. Distance = Speed × Time = 80 km/h × 0.75 h = 60 km." },
+            { id: 'm2q10', question: "If 5(x - 2) = 35, what is the value of x?", options: ["x = 9", "x = 7", "x = 5"], correctAnswer: "x = 9", explanation: "Divide both sides by 5: x - 2 = 35 ÷ 5 = 7. Then, add 2 to both sides: x = 7 + 2 = 9." },
+            { id: 'm2q11', question: "Two cars start from the same point and travel in opposite directions. Car A's speed is 60 km/h and Car B's speed is 70 km/h. How far apart are they after 3 hours?", options: ["390 km", "30 km", "130 km"], correctAnswer: "390 km", explanation: "Their combined speed moving apart is 60 + 70 = 130 km/h. Distance apart = Combined Speed × Time = 130 km/h × 3 h = 390 km." },
+            { id: 'm2q12', question: "A baker can decorate a cake in m minutes. How many cakes can he decorate in 2 hours?", options: ["120m", "2/m", "120/m"], correctAnswer: "120/m", explanation: "First, convert 2 hours to minutes: 2 × 60 = 120 minutes. Number of cakes = Total Time ÷ Time per cake = 120 / m." },
+            { id: 'm2q13', question: "A tank is 1/4 full. After adding 30 litres of water, it becomes 3/4 full. What is the capacity of the tank?", options: ["60 litres", "80 litres", "120 litres"], correctAnswer: "60 litres", explanation: "The change in fullness is 3/4 - 1/4 = 2/4 = 1/2. So, 1/2 of the tank's capacity is 30 litres. The full capacity is 30 × 2 = 60 litres." },
+            { id: 'm2q14', question: "Solve for a: a/4 + 3 = 8.", options: ["a = 20", "a = 11", "a = 44"], correctAnswer: "a = 20", explanation: "Subtract 3 from both sides: a/4 = 8 - 3 = 5. Then, multiply both sides by 4: a = 5 × 4 = 20." },
+            { id: 'm2q15', question: "Ben cycles at 12 m/s and Tom cycles at 15 m/s. They start at the same time. How much further will Tom be than Ben after 2 minutes?", options: ["360 m", "180 m", "30 m"], correctAnswer: "360 m", explanation: "Tom is faster by 15 - 12 = 3 m/s. Time = 2 minutes = 120 seconds. Extra distance = Difference in speed × Time = 3 m/s × 120 s = 360 m." },
+            { id: 'm2q16', question: "Mei is y years old. Her father is 3 times her age. In 5 years' time, what will be their total age?", options: ["4y + 5", "3y + 10", "4y + 10"], correctAnswer: "4y + 10", explanation: "Current ages: Mei=y, Father=3y. In 5 years: Mei=y+5, Father=3y+5. Total age then = (y+5) + (3y+5) = 4y + 10." },
+            { id: 'm2q17', question: "A pipe can fill a pool in 6 hours. A drain can empty it in 9 hours. If both are open, how long will it take to fill the pool?", options: ["18 hours", "15 hours", "3 hours"], correctAnswer: "18 hours", explanation: "In 1 hour, pipe fills 1/6 of the pool. Drain empties 1/9. Net fill rate = 1/6 - 1/9 = 3/18 - 2/18 = 1/18 of the pool per hour. Time to fill = 1 / (1/18) = 18 hours." },
+            { id: 'm2q18', question: "A rectangle has a length of (2x + 1) cm and a width of 5 cm. If its perimeter is 32 cm, find x.", options: ["x = 5", "x = 4", "x = 3"], correctAnswer: "x = 5", explanation: "Perimeter = 2(L+W) = 2((2x+1) + 5) = 32. So, 2(2x+6) = 32. 4x + 12 = 32. 4x = 20. x = 5." },
+            { id: 'm2q19', question: "A bus left Singapore for Kuala Lumpur at 8:00 a.m. at 70 km/h. A car left at 9:00 a.m. at 90 km/h. At what time did the car overtake the bus?", options: ["12:30 p.m.", "11:30 a.m.", "1:30 p.m."], correctAnswer: "12:30 p.m.", explanation: "The bus had a 1-hour head start, covering 70 km. The car gains on the bus at 90-70 = 20 km/h. Time to catch up = 70 km / 20 km/h = 3.5 hours. The car started at 9:00 a.m., so it overtakes at 9:00 + 3.5 hours = 12:30 p.m." },
+            { id: 'm2q20', question: "The average of four numbers is 15. If a fifth number, k, is added, the new average is 18. What is the value of k?", options: ["30", "27", "3"], correctAnswer: "30", explanation: "Initial total = 4 × 15 = 60. New total = 5 × 18 = 90. The value of k is the difference: 90 - 60 = 30." }
+        ],
+        "Set 3: Super Challenging Problems": [
+            { id: 'm3q1', question: "Car A leaves Town X for Town Y at 8 a.m., travelling at 60 km/h. Car B leaves Town Y for Town X at 9 a.m., travelling at 90 km/h. If the distance is 460 km, at what time will they meet?", options: ["11:00 a.m.", "11:40 a.m.", "12:00 p.m."], correctAnswer: "11:40 a.m.", explanation: "By 9 a.m., Car A has travelled 60 km. The remaining distance between them is 460 - 60 = 400 km. Their combined speed is 60 + 90 = 150 km/h. Time to meet = Distance ÷ Combined Speed = 400 ÷ 150 = 8/3 hours = 2 hours and 40 minutes. They meet at 9:00 a.m. + 2h 40min = 11:40 a.m." },
+            { id: 'm3q2', question: "Adam has 4 times as many marbles as Ben. If Adam gives 18 marbles to Ben, they will have the same number of marbles. How many marbles do they have in total?", options: ["60", "72", "90"], correctAnswer: "60", explanation: "Let Ben have x marbles, Adam has 4x. After the exchange: Adam has 4x-18, Ben has x+18. They are equal: 4x-18 = x+18. 3x=36, so x=12. Ben has 12, Adam has 4*12=48. Total = 12+48=60." },
+            { id: 'm3q3', question: "A cyclist traveled 1/3 of his journey at 30 km/h and the rest of the journey at 40 km/h. The total journey was 180 km. Find the average speed for the whole journey.", options: ["36 km/h", "35 km/h", "37.5 km/h"], correctAnswer: "36 km/h", explanation: "First part: 1/3 * 180 = 60 km. Time1 = 60km / 30km/h = 2h. Second part: 180-60 = 120km. Time2 = 120km / 40km/h = 3h. Total Distance = 180km. Total Time = 2h+3h = 5h. Average Speed = 180km / 5h = 36km/h." },
+            { id: 'm3q4', question: "A box contains red and blue pens. 20% of the pens are red. If 10 blue pens are removed, the percentage of red pens becomes 25%. How many pens were in the box at first?", options: ["80", "100", "50"], correctAnswer: "50", explanation: "Let R be red pens, B be blue pens. At first, R = 0.2(R+B) => 4R = B. After, R = 0.25(R+B-10) => 3R = B-10. Substitute B=4R into the 2nd equation: 3R = 4R-10 => R=10. Then B=40. Total at first = R+B = 10+40=50." },
+            { id: 'm3q5', question: "A train travelling at 90 km/h overtakes a man walking at 6 km/h in the same direction in 10 seconds. Find the length of the train.", options: ["233 m", "250 m", "267 m"], correctAnswer: "233 m", explanation: "Relative speed = 90 - 6 = 84 km/h. Convert to m/s: 84 * (1000m/3600s) = 70/3 m/s. Length of train = Relative Speed × Time = (70/3) m/s × 10 s = 700/3 m ≈ 233 m." },
+            { id: 'm3q6', question: "The total cost of 5 apples and 3 oranges is $6.90. The total cost of 3 apples and 5 oranges is $7.50. What is the cost of one apple?", options: ["$0.75", "$1.05", "$0.60"], correctAnswer: "$0.75", explanation: "Let A be apple, O be orange. (1) 5A+3O=6.90; (2) 3A+5O=7.50. Add them: 8A+8O=14.40 -> A+O=1.80. From this, O=1.80-A. Sub into (1): 5A+3(1.80-A)=6.90 -> 5A+5.4-3A=6.90 -> 2A=1.50 -> A=$0.75." },
+            { id: 'm3q7', question: 'A tap can fill a tank in 8 hours. After it has been open for 2 hours, a leak develops which can empty the full tank in 12 hours. How much longer will it take to fill the tank?', options: ["18 hours", "12 hours", "16 hours"], correctAnswer: "18 hours", explanation: "In 2 hours, 2/8 = 1/4 of the tank is filled. Remaining work is 3/4 of the tank. The net fill rate with the leak is (1/8) - (1/12) = 1/24 of the tank per hour. Time = Work / Rate = (3/4) / (1/24) = (3/4) * 24 = 18 hours." },
+            { id: 'm3q8', question: "If 2/3 of Kelvin's money is equal to 4/5 of Leo's money, what is the ratio of Kelvin's money to Leo's money?", options: ["6:5", "5:6", "10:12"], correctAnswer: "6:5", explanation: "Let K be Kelvin's money, L be Leo's. (2/3)K = (4/5)L. To find the ratio K:L (which is K/L), rearrange the equation: K/L = (4/5) / (2/3) = (4/5) * (3/2) = 12/10 = 6/5. So the ratio is 6:5." },
+            { id: 'm3q9', question: "A bus journey from A to B took 5 hours. If the bus speed had been 10 km/h faster, the journey would have taken 1 hour less. What was the original speed of the bus?", options: ["40 km/h", "50 km/h", "60 km/h"], correctAnswer: "40 km/h", explanation: "Let original speed be S and distance be D. D = S * 5. Also D = (S+10) * 4. So, 5S = 4(S+10) => 5S = 4S + 40 => S = 40 km/h." },
+            { id: 'm3q10', question: "There are some chickens and goats in a farm. There are 35 heads and 100 legs. How many chickens are there?", options: ["15", "20", "25"], correctAnswer: "20", explanation: "Let c be chickens, g be goats. Heads: c+g=35. Legs: 2c+4g=100. From heads eq, g=35-c. Sub into legs eq: 2c+4(35-c)=100 => 2c+140-4c=100 => -2c = -40 => c=20." },
+            { id: 'm3q11', question: "At a sale, a shop sold everything at a 20% discount. If a customer paid $60 for a shirt, what was the original price?", options: ["$72", "$75", "$80"], correctAnswer: "$75", explanation: "$60 represents 100% - 20% = 80% of the original price. So, 80% = $60. 1% = $60/80 = $0.75. 100% = $0.75 * 100 = $75." },
+            { id: 'm3q12', question: "A boat travels upstream for 20 km in 5 hours. It travels downstream for 20 km in 2 hours. What is the speed of the boat in still water?", options: ["7 km/h", "4 km/h", "10 km/h"], correctAnswer: "7 km/h", explanation: "Upstream speed = 20/5 = 4 km/h. Downstream speed = 20/2 = 10 km/h. Let boat speed be B and current speed be C. B-C=4 and B+C=10. Add the two equations: 2B=14 => B = 7 km/h." },
+            { id: 'm3q13', question: "The average weight of a group of boys is 40 kg. When a boy weighing 54 kg joins, the average becomes 42 kg. How many boys were there in the group initially?", options: ["5", "6", "7"], correctAnswer: "6", explanation: "Let n be the initial number of boys. Initial total weight = 40n. After new boy joins: (40n + 54) / (n+1) = 42. So 40n + 54 = 42(n+1) = 42n + 42. So 12 = 2n, which means n=6." },
+            { id: 'm3q14', question: "Ali, Ben and Charles share a sum of money. Ali gets $x. Ben gets twice as much as Ali. Charles gets $15 more than Ben. If the total sum is $165, find x.", options: ["$30", "$35", "$25"], correctAnswer: "$30", explanation: "Ali=x. Ben=2x. Charles=2x+15. Total: x + 2x + (2x+15) = 165. So 5x + 15 = 165. 5x = 150. x = 30." },
+            { id: 'm3q15', question: "A motorist starts on a 300 km journey at 9 a.m. He travels the first 120 km at 60 km/h. He stops for 30 minutes. At what speed must he travel the rest of the journey to arrive at 1 p.m.?", options: ["120 km/h", "100 km/h", "90 km/h"], correctAnswer: "120 km/h", explanation: "Total time allowed is 4h (9am to 1pm). Time for 1st part = 120km/60kmh = 2h. Time left after rest = 4h - 2h - 0.5h = 1.5h. Distance left = 300-120=180km. Speed needed = 180km / 1.5h = 120 km/h." },
+            { id: 'm3q16', question: "A worker is paid $12 per hour for the first 8 hours and $18 per hour for overtime. If he worked 11 hours in a day, how much would he earn?", options: ["$150", "$138", "$198"], correctAnswer: "$150", explanation: "Regular pay = 8 hours * $12/hr = $96. Overtime hours = 11 - 8 = 3 hours. Overtime pay = 3 hours * $18/hr = $54. Total earnings = $96 + $54 = $150." },
+            { id: 'm3q17', question: "The ratio of Jack's age to his father's age is 2:5. In 8 years, the ratio of their ages will be 1:2. What is Jack's current age?", options: ["12", "16", "8"], correctAnswer: "16", explanation: "Let Jack's current age be 2x and his father's be 5x. In 8 years, their ages will be 2x+8 and 5x+8. The ratio becomes (2x+8)/(5x+8) = 1/2. Cross-multiply: 2(2x+8) = 1(5x+8) => 4x+16 = 5x+8. Solving for x gives x=8. Jack's current age is 2x = 2*8 = 16." },
+            { id: 'm3q18', question: "A rectangular tank 50 cm long, 20 cm wide and 30 cm high is half-filled with water. Water flows in from a tap at a rate of 2 litres per minute. How long will it take to fill the tank completely?", options: ["7.5 min", "15 min", "30 min"], correctAnswer: "7.5 min", explanation: "Total volume = 50*20*30 = 30000 cm³. 1 litre = 1000 cm³. So total volume = 30 litres. It is half-filled, so it contains 15 litres. Volume to fill = 15 litres. Time = Volume / Rate = 15 litres / 2 litres/min = 7.5 minutes." },
+            { id: 'm3q19', question: "A man cycles from P to Q. If he increases his speed by 25%, by what percentage would his time taken decrease?", options: ["25%", "20%", "33.3%"], correctAnswer: "20%", explanation: "Let original speed be S, time be T. New speed S' = 1.25S. Since Distance is constant, ST = S'T'. So ST = (1.25S)T'. T' = T/1.25 = 0.8T. The new time is 80% of the old time, which is a 20% decrease." },
+            { id: 'm3q20', question: "In a class, 40% of the students are girls. 1/3 of the boys and 1/2 of the girls wear glasses. What fraction of the class wears glasses?", options: ["2/5", "3/10", "1/4"], correctAnswer: "2/5", explanation: "Girls = 40%, Boys = 60%. Boys with glasses = (1/3) * 60% = 20% of the class. Girls with glasses = (1/2) * 40% = 20% of the class. Total with glasses = 20% + 20% = 40% of the class. 40% is equal to the fraction 40/100 = 2/5." }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-blue-500 hover:bg-blue-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered this topic!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Math' }) // Set subject to "Math"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
