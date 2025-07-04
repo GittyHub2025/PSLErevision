@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Advanced Topics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-amber-200 via-orange-200 to-yellow-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-amber-700">Ready for a Challenge?</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start the advanced PSLE Science revision.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-amber-500 focus:border-amber-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-amber-500 hover:bg-amber-600 text-white w-full py-3 px-6 text-lg">Let's Begin!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-amber-700 mb-2">PSLE Science: Advanced Sets</h1>
+            <p class="text-slate-600 mb-8">Choose a combined topic set to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-amber-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-amber-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-amber-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-amber-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-amber-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-amber-500 hover:bg-amber-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleScienceCombinedApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW ADVANCED FLASHCARD SETS ---
+    const allFlashcardSets = {
+        "Set 4: Integrated Systems & Applications": [
+            { id: 'c1q1', question: "A hydroelectric dam uses the ___ force on water to turn a turbine, which generates electricity. This whole process is part of the Earth's ___ cycle.", options: ["magnetic; carbon", "gravitational; water", "frictional; rock"], correctAnswer: "gravitational; water", explanation: "Gravitational force pulls the water down (converting GPE to KE), and this system taps into the natural collection and flow of water in the water cycle.", image: null },
+            { id: 'c1q2', question: "A refrigerator uses an electrically powered pump to cause a special liquid to evaporate. Evaporation is a cooling process because it ___ heat from the food inside.", options: ["absorbs", "releases", "creates"], correctAnswer: "absorbs", explanation: "This links electricity (the pump) with the water/matter cycle (evaporation). For a liquid to become a gas, it must absorb heat energy from its surroundings.", image: null },
+            { id: 'c1q3', question: "To separate a mixture of iron filings, sand, and salt, what two processes from different topics would you use in order?", options: ["Evaporation then magnetism", "Magnetism then adding water & filtering", "Filtering then evaporation"], correctAnswer: "Magnetism then adding water & filtering", explanation: "First, use a magnet (Forces) to remove the iron. Then, add water to dissolve the salt (Cycles/Matter), and filter the sand out. Finally, evaporate the water to get the salt back.", image: null },
+            { id: 'c1q4', question: "A solar-powered fan on a hot day demonstrates the conversion of light energy to ___ energy, which then creates a force to move air.", options: ["electrical", "chemical", "potential"], correctAnswer: "electrical", explanation: "The solar panel converts light to electricity. The electric motor (Electrical Systems) converts this to kinetic energy (motion), creating a force on the air.", image: null },
+            { id: 'c1q5', question: "When a tree branch falls into a river, ___ acts on it, causing it to float downstream. Over time, ___ like bacteria and fungi will cause it to decay.", options: ["friction; producers", "gravity; consumers", "upthrust and water flow; decomposers"], correctAnswer: "upthrust and water flow; decomposers", explanation: "This question combines Forces (upthrust, gravity, forces from flow) with Diversity (the role of decomposers in breaking down matter).", image: null },
+            { id: 'c1q6', question: "Why does rubbing a balloon on your hair (friction) allow it to stick to a wall (a non-contact force)?", options: ["It heats up the balloon", "It creates static electricity", "It makes the balloon magnetic"], correctAnswer: "It creates static electricity", explanation: "Friction (Forces) transfers electrons, creating a static electric charge. This charge can then induce an opposite charge in the wall, creating a non-contact attractive force.", image: null },
+            { id: 'c1q7', question: "An electric motor works because a current in a wire creates a ___, which interacts with other magnets to produce a turning force (motion).", options: ["water cycle", "magnetic field", "gravitational field"], correctAnswer: "magnetic field", explanation: "This is the core principle of a motor, linking Electrical Systems (current) with Forces (magnetism and motion).", image: null },
+            { id: 'c1q8', question: "Why do wet clothes dry faster on a windy day? This is because the wind increases the rate of ___ by blowing away moist air.", options: ["condensation", "evaporation", "precipitation"], correctAnswer: "evaporation", explanation: "This links the water cycle (evaporation) with forces (the force of the wind moving air). The moving air reduces the humidity right next to the clothes, allowing more water to evaporate.", image: null },
+            { id: 'c1q9', question: "A 'Maglev' train floats above the track using powerful electromagnets. This system uses ___ to overcome the force of ___.", options: ["friction; gravity", "magnetic repulsion; gravity", "gravity; friction"], correctAnswer: "magnetic repulsion; gravity", explanation: "This combines Electrical Systems (electromagnets) and Forces. The magnetic force must be strong enough to push the train upwards, counteracting the downward pull of gravity.", image: null },
+            { id: 'c1q10', question: "In a sealed terrarium with plants left in the sun, which two cycles are most evident?", options: ["Water and Carbon Cycles", "Electrical and Force Cycles", "Rock and Nitrogen Cycles"], correctAnswer: "Water and Carbon Cycles", explanation: "The water evaporates and condenses (Water Cycle). The plants photosynthesize (taking in CO2) and respire (releasing CO2), which is part of the Carbon Cycle and a key concept in Diversity.", image: null },
+            { id: 'c1q11', question: "A circuit is made with a battery, a switch, and a thin wire filament inside a glass bulb. When the switch is closed, the filament glows. This is because its high electrical resistance causes it to get hot due to ___.", options: ["gravity", "friction", "electrical energy conversion"], correctAnswer: "electrical energy conversion", explanation: "This combines Electrical Systems with Energy. The resistance of the filament converts electrical energy into heat and light energy. The 'friction' of electrons moving through the material causes this.", image: null },
+            { id: 'c1q12', question: "A compass works because its needle is a small magnet that aligns with Earth's magnetic field. This field is a ___ force, similar to ___.", options: ["contact; friction", "non-contact; gravity", "balanced; a push"], correctAnswer: "non-contact; gravity", explanation: "This links two types of non-contact forces. Both magnetism and gravity can act over a distance without physical touching.", image: null },
+            { id: 'c1q13', question: "When a plant's roots grow downwards through soil, they are responding to the force of ___. This process is a characteristic of ___.", options: ["friction; non-living things", "gravity; living things", "magnetism; fungi"], correctAnswer: "gravity; living things", explanation: "This links Forces (gravity) with Diversity. The plant's response to a stimulus (geotropism) is one of the key characteristics of life.", image: null },
+            { id: 'c1q14', question: "A hybrid car uses both a petrol engine and an electric motor. When the car brakes, the wheels help turn a generator. This process converts ___ energy back into ___ energy to charge the battery.", options: ["kinetic; electrical", "electrical; kinetic", "chemical; potential"], correctAnswer: "kinetic; electrical", explanation: "This is a real-world system combining Forces/Energy (kinetic energy of motion) and Electrical Systems (generating electricity).", image: null },
+            { id: 'c1q15', question: "A puddle of salt water is left in the sun. After a few days, only salt crystals are left. This is because the water ___ but the salt did not.", options: ["condensed", "evaporated", "precipitated"], correctAnswer: "evaporated", explanation: "This demonstrates a key part of the water cycle (evaporation) and properties of matter. The state change from liquid to gas for water happens at a much lower temperature than for salt.", image: null },
+            { id: 'c1q16', question: "A stunt person jumps from a tall building onto a large airbag. The airbag saves them by increasing the ___ over which the stopping force acts, which reduces the peak force.", options: ["time", "gravity", "mass"], correctAnswer: "time", explanation: "This is a key application of forces. The soft airbag deforms, increasing the time it takes to stop. This reduces the force of impact, preventing injury.", image: null },
+            { id: 'c1q17', question: "What do a stretched rubber band and a battery have in common?", options: ["They are both magnetic", "They both store potential energy", "They are both electrical conductors"], correctAnswer: "They both store potential energy", explanation: "This is a high-level comparison. The rubber band stores elastic potential energy (Forces). The battery stores chemical potential energy (Electrical Systems). Both store energy to be released later.", image: null },
+            { id: 'c1q18', question: "Why are the feathers of a bird, a key feature for its classification, also useful for flight?", options: ["They are heavy, which helps with gravity.", "They are shaped to create lift, a force that opposes gravity.", "They conduct electricity well."], correctAnswer: "They are shaped to create lift, a force that opposes gravity.", explanation: "This links Diversity (classification of birds) with Forces. The airfoil shape of the wing/feathers creates a pressure difference, resulting in an upward force called lift.", image: null },
+            { id: 'c1q19', question: "A person's body shivers when cold. This is an involuntary muscle contraction that generates heat through increased metabolic activity. This is an example of a living thing responding to its environment and involves the conversion of ___ energy to ___ energy.", options: ["chemical; heat", "electrical; light", "kinetic; potential"], correctAnswer: "chemical; heat", explanation: "This links Diversity (sensitivity of living things) with Energy. The body uses stored chemical energy from food to produce heat through muscle action.", image: null },
+            { id: 'c1q20', question: "A light-dependent resistor (LDR) is used in a circuit to automatically turn on a lamp when it gets dark. The LDR is a sensor that changes its ___ based on the amount of light.", options: ["resistance", "mass", "temperature"], correctAnswer: "resistance", explanation: "This advanced electrical component links light (Energy) with Electrical Systems. The circuit can be set up so that when light is low, the LDR's resistance becomes low, allowing current to flow to the lamp.", image: null }
+        ],
+        "Set 5: Experimental Design & Analysis": [
+            { id: 'c2q1', question: "A student wants to test if the number of batteries in a series circuit affects bulb brightness. What is the independent (changed) variable?", options: ["Bulb brightness", "Number of batteries", "Type of bulb"], correctAnswer: "Number of batteries", explanation: "The independent variable is the one thing the scientist purposely changes to see what effect it has. Here, the student is changing the number of batteries.", image: null },
+            { id: 'c2q2', question: "In the experiment from the previous question, what is the dependent (measured) variable?", options: ["Number of batteries", "Bulb brightness", "Length of wires"], correctAnswer: "Bulb brightness", explanation: "The dependent variable is what you observe or measure to see the result of your change. Brightness is the outcome being measured.", image: null },
+            { id: 'c2q3', question: "To test which material is the best electrical conductor, a student places different rods into a gap in a circuit with a bulb. To make it a fair test, what must be kept the same?", options: ["The brightness of the bulb", "The length and thickness of the rods", "The material of the rods"], correctAnswer: "The length and thickness of therods", explanation: "To ensure a fair comparison, all other factors that could affect the result must be controlled. The material is the one thing you are changing.", image: null },
+            { id: 'c2q4', question: "A student measures the time it takes for a toy car to roll down different ramps. To investigate the effect of ramp height on speed, what must be a controlled variable?", options: ["The height of the ramp", "The time taken to roll down", "The toy car used"], correctAnswer: "The toy car used", explanation: "To ensure a fair test, you must use the same car each time. The ramp height is what you change (independent variable), and the time is what you measure (dependent variable).", image: null },
+            { id: 'c2q5', question: "A student concludes, 'My plant in the dark died, so all plants need light.' Why might this conclusion be flawed without a control?", options: ["The plant may have died from lack of water", "The student is correct", "The plant might be a fungus"], correctAnswer: "The plant may have died from lack of water", explanation: "A control experiment (e.g., another plant given light AND water) is needed to prove that the lack of light was the only reason for the death, not other factors like water or temperature.", image: null },
+            { id: 'c2q6', question: "To test the strength of an electromagnet, a student varies the number of coils of wire around an iron nail. What is a reliable way to measure the electromagnet's strength?", options: ["See how hot it gets", "Count the max number of paper clips it can pick up", "Measure the length of the wire"], correctAnswer: "Count the max number of paper clips it can pick up", explanation: "This provides a quantitative (numerical) measure of the magnetic force, allowing for a clear comparison between different numbers of coils.", image: null },
+            { id: 'c2q7', question: "A student wants to find out if temperature affects the rate of evaporation. They place two identical beakers with 100ml of water in different locations. What is the key difference needed between the locations?", options: ["One must be windy, one must be still", "One must be hot, one must be cool", "One must be large, one must be small"], correctAnswer: "One must be hot, one must be cool", explanation: "To test for the effect of temperature, it must be the only significant variable changed between the two setups.", image: null },
+            { id: 'c2q8', question: "After the evaporation experiment, the student measures the remaining water. The beaker in the hot location has less water left. This supports the hypothesis that a higher temperature ___ the rate of evaporation.", options: ["decreases", "increases", "does not affect"], correctAnswer: "increases", explanation: "Less water remaining means more water has evaporated. This result directly supports the idea that heat increases the rate of evaporation.", image: null },
+            { id: 'c2q9', question: "A student drops a ball from 1 metre onto different surfaces (carpet, tile, grass) to see which is 'bounciest'. What should she measure to compare the bounciness?", options: ["The time it takes to hit the ground", "The height the ball bounces back up to", "The sound of the bounce"], correctAnswer: "The height the ball bounces back up to", explanation: "The rebound height is a direct measure of how much kinetic energy was conserved and converted back from elastic energy, indicating 'bounciness'.", image: null },
+            { id: 'c2q10', question: "A student sets up two circuits, one series and one parallel, each with two identical bulbs and one battery. They observe the parallel bulbs are brighter. What is a valid conclusion?", options: ["Parallel circuits use less wire", "Bulbs in parallel receive more voltage than bulbs in series", "Series circuits are safer"], correctAnswer: "Bulbs in parallel receive more voltage than bulbs in series", explanation: "The observation (brighter bulbs) leads to the conclusion about the underlying principle: in parallel, each bulb gets the full battery voltage, while in series, the voltage is shared.", image: null },
+            { id: 'c2q11', question: "To test the 'like poles repel' rule, a student pushes the North pole of a bar magnet towards the North pole of another magnet on wheels. What observation would confirm the rule?", options: ["The wheeled magnet moves away", "The wheeled magnet moves closer", "The wheeled magnet does not move"], correctAnswer: "The wheeled magnet moves away", explanation: "Repulsion is a pushing force. The observation of the second magnet being pushed away without being touched would confirm the rule.", image: null },
+            { id: 'c2q12', question: "A student wants to know if a material is a plant or fungus. What is the most definitive test?", options: ["See if it's green", "Test for the presence of chlorophyll or if it needs light to survive", "See if it grows in the ground"], correctAnswer: "Test for the presence of chlorophyll or if it needs light to survive", explanation: "The key difference is how they get food. Plants make their own food using light (photosynthesis), fungi do not. Green colour is a good hint, but a direct test for this function is better.", image: null },
+            { id: 'c2q13', question: "To prove that friction produces heat, what could a student do?", options: ["Place a block on a table", "Measure the temperature of a block, slide it back and forth on a surface, then measure again", "Push a block with a spring balance"], correctAnswer: "Measure the temperature of a block, slide it back and forth on a surface, then measure again", explanation: "This experiment directly tests the hypothesis by measuring the variable (temperature) before and after the action (creating friction).", image: null },
+            { id: 'c2q14', question: "A student places a beaker of ice on a scale, which reads 200g. They let the ice melt completely. Assuming no evaporation, what should the scale read?", options: ["Less than 200g", "Exactly 200g", "More than 200g"], correctAnswer: "Exactly 200g", explanation: "This experiment demonstrates the conservation of mass. Changing state from solid to liquid does not change the amount of matter, so the mass (and weight) remains constant.", image: null },
+            { id: 'c2q15', question: "A student designs an experiment to see if adding salt to water affects its freezing point. What is the control setup for this experiment?", options: ["A beaker of salt with no water", "A beaker of pure water with no salt", "A beaker of salt water at room temperature"], correctAnswer: "A beaker of pure water with no salt", explanation: "The control is the standard for comparison. To see the effect of the salt, you must compare it to an identical setup without the salt.", image: null },
+            { id: 'c2q16', question: "When investigating how a spring stretches, a student hangs different weights and measures the spring's length. The results show that a bigger weight causes a bigger stretch. This relationship is ___.", options: ["inverse", "direct", "random"], correctAnswer: "direct", explanation: "A direct relationship means that as one variable (weight) increases, the other variable (stretch) also increases. This is a key part of data analysis.", image: null },
+            { id: 'c2q17', question: "A student wants to test if a beetle prefers light or dark conditions. They set up a box that is half-covered and half-lit, and place the beetle in the middle. After 10 minutes, the beetle is in the covered half. What is a possible source of error in this conclusion?", options: ["The beetle might prefer the temperature in the dark half", "The experiment is perfect", "Beetles cannot see light"], correctAnswer: "The beetle might prefer the temperature in the dark half", explanation: "A good experiment only changes ONE variable. The light source might also be creating heat, so the beetle could be responding to temperature, not light. This is a confounding variable.", image: null },
+            { id: 'c2q18', question: "To find out if an unknown liquid is an electrical conductor, you should connect it into a circuit with a battery and a ___, then see if it works.", options: ["voltmeter", "light bulb", "switch"], correctAnswer: "light bulb", explanation: "The light bulb acts as an indicator. If it lights up, it means current is flowing through the liquid, proving it is a conductor.", image: null },
+            { id: 'c-q19', question: "A student observes that a puddle dries up faster on a windy day than a still day. They conclude 'wind causes evaporation'. What's a more scientific way to phrase the conclusion?", options: ["Wind makes water disappear", "The presence of wind increases the rate of evaporation", "Wind is hot"], correctAnswer: "The presence of wind increases the rate of evaporation", explanation: "Scientific conclusions should be precise. The wind doesn't 'cause' evaporation, but it does affect the speed (rate) at which it happens.", image: null },
+            { id: 'c2q20', question: "An experiment shows that a ball rolling on grass stops sooner than a ball rolling on concrete. The main conclusion is that grass exerts a greater ___ force.", options: ["gravitational", "magnetic", "frictional"], correctAnswer: "frictional", explanation: "This experiment is designed to compare the friction of different surfaces. The surface that stops the ball faster is the one creating more friction.", image: null }
+        ],
+        "Set 6: Advanced Scenarios & Reasoning": [
+            { id: 'c3q1', question: "A ball is at the top of a ramp. As it rolls down, its ___ energy is converted into ___ energy.", options: ["kinetic; potential", "gravitational potential; kinetic", "electrical; light"], correctAnswer: "gravitational potential; kinetic", explanation: "This involves energy transformation. At the top, it has stored energy due to its height (GPE). As it rolls down, this is converted into energy of motion (KE).", image: null },
+            { id: 'c3q2', question: "In a circuit diagram, an open switch is placed in parallel with a bulb. What happens when this circuit is connected to a battery?", options: ["The bulb will not light up", "The bulb will light up", "The battery will short circuit"], correctAnswer: "The bulb will light up", explanation: "Electricity will flow through the path of the bulb because the parallel path with the switch is open (an infinite resistance gap). The bulb's path is still a complete circuit.", image: null },
+            { id: 'c3q3', question: "A boat is floating in the water. This means the downward force of gravity on the boat is ___ the upward force of upthrust from the water.", options: ["greater than", "less than", "equal to"], correctAnswer: "equal to", explanation: "For an object to be stationary (floating, not sinking or rising), the forces on it must be balanced. The upward push (upthrust) perfectly cancels out the downward pull (gravity).", image: null },
+            { id: 'c3q4', question: "A circuit contains three bulbs, A, B and C. When A is unscrewed, B and C go out. When C is unscrewed, A and B stay lit. Which bulb is in series with the battery before the others?", options: ["Bulb B", "Bulb C", "Bulb A"], correctAnswer: "Bulb A", explanation: "Since removing A affects everything, it must be on the main branch. Since removing C doesn't affect A or B, C must be on a parallel branch with another bulb.", image: null },
+            { id: 'c3q5', question: "An astronaut on the Moon drops a hammer. It falls to the ground because of the Moon's gravity. Her weight on the Moon is less than on Earth because ___.", options: ["the Moon has less mass than Earth", "there is no air on the Moon", "she is further from the Sun"], correctAnswer: "the Moon has less mass than Earth", explanation: "Weight is the force of gravity (F=ma). While her mass (m) is constant, the Moon's smaller mass results in a smaller gravitational acceleration (a), thus a lower weight.", image: null },
+            { id: 'c3q6', question: "A ball is thrown upwards. At the very peak of its flight, its velocity is momentarily zero. At this instant, the net force on the ball is ___.", options: ["zero", "upwards", "downwards (gravity)"], correctAnswer: "downwards (gravity)", explanation: "Even when it's not moving, gravity is still pulling it down. This unbalanced downward force is what will cause it to start moving downwards again. (Ignoring air resistance).", image: null },
+            { id: 'c3q7', question: "Why does a metal spoon in a cup of hot tea get hot, while a plastic spoon does not get as hot?", options: ["Metal is a better conductor of heat", "Plastic is a better conductor of heat", "The metal spoon is magnetic"], correctAnswer: "Metal is a better conductor of heat", explanation: "This is about heat transfer (part of the energy topic). Metals have free-moving electrons that transfer thermal energy quickly, while plastic does not.", image: null },
+            { id: 'c3q8', question: "A circuit has two switches, S1 and S2, controlling one bulb. The bulb lights up if S1 is closed OR S2 is closed. How are the switches arranged?", options: ["In series with each other", "In parallel with each other", "One controls the other"], correctAnswer: "In parallel with each other", explanation: "This describes an 'OR' gate. Closing either switch provides a complete path for the electricity to flow. This means they must be on separate, parallel branches.", image: null },
+            { id: 'c3q9', question: "A student makes an electromagnet by wrapping wire around an iron nail. To make the magnet stronger, they should ___.", options: ["use a plastic nail", "decrease the number of coils", "increase the number of coils or increase the current"], correctAnswer: "increase the number of coils or increase the current", explanation: "The strength of an electromagnet is directly proportional to two main factors: the number of turns in the coil and the amount of current flowing through it.", image: null },
+            { id: 'c3q10', question: "A car is accelerating. This means the forward thrust from the engine is ___ the combined backward forces of friction and air resistance.", options: ["less than", "equal to", "greater than"], correctAnswer: "greater than", explanation: "According to Newton's laws, for an object to accelerate (change its velocity), there must be a net, unbalanced force. The forward force must be winning.", image: null },
+            { id: 'c3q11', question: "Which of these is the best example of converting chemical energy to electrical energy, then to light and heat energy?", options: ["A burning candle", "A battery-powered torchlight", "A solar panel"], correctAnswer: "A battery-powered torchlight", explanation: "The battery stores chemical energy. It produces electricity (electrical energy). The bulb converts this electricity to light and heat energy. This shows the full energy conversion chain.", image: null },
+            { id: 'c3q12', question: "A person stands on a weighing scale in a lift that is accelerating upwards. The scale will show a reading that is ___ their actual weight.", options: ["less than", "equal to", "greater than"], correctAnswer: "greater than", explanation: "The scale measures the upward force it exerts. To accelerate the person upwards, the scale must push up with a force greater than gravity. This results in a higher reading.", image: null },
+            { id: 'c3q13', question: "A plant is placed inside a sealed glass box with a beaker of limewater. The box is kept in the dark. After a day, the limewater turns chalky. This shows that the plant is carrying out ___.", options: ["photosynthesis", "respiration", "transpiration"], correctAnswer: "respiration", explanation: "Limewater turning chalky indicates the presence of carbon dioxide. In the dark, the plant cannot photosynthesize but still respires, releasing CO2.", image: null },
+            { id: 'c3q14', question: "What is the key advantage of a parallel circuit in household wiring?", options: ["It saves electricity", "It allows independent control of appliances", "It is easier to repair"], correctAnswer: "It allows independent control of appliances", explanation: "If appliances were in series, turning one off would break the circuit for all of them. Parallel wiring allows each appliance to operate on its own circuit branch.", image: null },
+            { id: 'c3q15', question: "A steel ball and a plastic ball of the same size are dropped in a vacuum (no air). Which force is acting on them and how will they fall?", options: ["Only gravity; they fall at the same rate", "Gravity and friction; the steel ball falls faster", "Only friction; they float"], correctAnswer: "Only gravity; they fall at the same rate", explanation: "In a vacuum, there is no air resistance (friction). Gravity accelerates all objects at the same rate regardless of their mass, so they fall together.", image: null },
+            { id: 'c3q16', question: "A spring is stretched by 5 cm and stores X amount of energy. If it is stretched by 10 cm, it will store ___.", options: ["X amount of energy", "2X amount of energy", "More than 2X amount of energy"], correctAnswer: "More than 2X amount of energy", explanation: "The energy stored in a spring is proportional to the square of its extension (E = ½kx²). Doubling the stretch (2x) quadruples the energy (4X). So the answer is 'more than 2X'.", image: null },
+            { id: 'c3q17', question: "A material is either a magnetic material (like iron) or a magnet. What is the only test that can prove it is a magnet?", options: ["See if it attracts a paperclip", "See if it repels another magnet", "See if it conducts electricity"], correctAnswer: "See if it repels another magnet", explanation: "Attraction can occur between a magnet and an unmagnetized magnetic material. Repulsion (a pushing force) can only occur between two magnets. This is the definitive test.", image: null },
+            { id: 'c3q18', question: "An ice cube is melting in a glass of water. During the melting process, the temperature of the ice-water mixture ___.", options: ["increases", "decreases", "stays at 0°C"], correctAnswer: "stays at 0°C", explanation: "The heat energy being absorbed is used to break the bonds and change the state from solid to liquid (latent heat). The temperature will not rise until all the ice has melted.", image: null },
+            { id: 'c3q19', question: "A circuit contains a battery and two bulbs, A and B. Bulb A is twice as bright as bulb B. What can we infer?", options: ["A and B must be in parallel", "A and B must be in series", "Bulb A has a higher power rating"], correctAnswer: "Bulb A has a higher power rating", explanation: "Brightness is related to power (P=VI). Bulb A is converting electrical energy to light and heat at a faster rate. This is independent of the circuit arrangement.", image: null },
+            { id: 'c3q20', question: "In the process of photosynthesis, a plant uses light energy to convert water and carbon dioxide into glucose (food) and oxygen. This is a conversion from light energy to ___ energy.", options: ["kinetic", "electrical", "chemical"], correctAnswer: "chemical", explanation: "Glucose is a chemical compound that stores energy in its bonds. This stored chemical energy is then used by the plant (or by animals that eat the plant) for life processes.", image: null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-amber-500 hover:bg-amber-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You're a Science Champion!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your critical thinking is strong.";
+        else encouragementTextEl.textContent = "Good effort! Review the incorrect answers to master these tough concepts.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
