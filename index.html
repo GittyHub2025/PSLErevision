@@ -16,8 +16,8 @@
     <style>
         /* --- General Styling --- */
         :root {
-            --primary-color: #4a90e2;
-            --secondary-color: #50e3c2;
+            --primary-color: #4a90e2; /* Blue */
+            --secondary-color: #50e3c2; /* Teal */
             --background-color: #1a202c;
             --card-background: #2d3748;
             --text-color: #e2e8f0;
@@ -46,14 +46,14 @@
             padding: 20px;
         }
 
-        /* --- Header --- */
-        header {
+        /* --- Main Header --- */
+        .main-header {
             text-align: center;
             padding: 40px 20px;
             animation: fadeInDown 1s ease-out;
         }
 
-        header h1 {
+        .main-header h1 {
             font-family: var(--header-font);
             font-size: 3.5rem;
             color: var(--secondary-color);
@@ -61,126 +61,99 @@
             letter-spacing: 2px;
         }
 
-        header h1 i {
+        .main-header h1 i {
             margin-right: 15px;
             transform: rotate(-15deg);
         }
 
-        header p {
+        .main-header p {
             font-size: 1.2rem;
             color: #a0aec0;
             margin-top: 10px;
         }
         
+        /* --- Subject Section Styling --- */
+        .subject-section {
+            background: var(--card-background);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 40px;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
+            animation: popIn 0.5s ease-out forwards;
+            opacity: 0; /* Initially hidden for animation */
+        }
+
+        /* Staggered animation for sections */
+        .subject-section:nth-of-type(1) { animation-delay: 0.2s; }
+        .subject-section:nth-of-type(2) { animation-delay: 0.4s; }
+        .subject-section:nth-of-type(3) { animation-delay: 0.6s; }
+        .subject-section:nth-of-type(4) { animation-delay: 0.8s; }
+
+        .subject-header {
+            display: flex;
+            align-items: center;
+            color: var(--primary-color);
+            border-bottom: 2px solid #4a5568;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+
+        .subject-header i {
+            font-size: 2.5rem;
+            margin-right: 20px;
+            color: var(--secondary-color);
+        }
+
+        .subject-header h2 {
+            font-family: var(--header-font);
+            font-size: 2.5rem;
+            letter-spacing: 1px;
+        }
+
         /* --- Link Grid --- */
-        #link-grid {
+        .link-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 25px;
-            padding: 20px 0;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
         }
 
         .link-button {
-            background: var(--card-background);
-            border-radius: 12px;
-            padding: 25px 20px;
+            background: #1a202c;
+            border: 1px solid #4a5568;
+            border-radius: 10px;
+            padding: 15px;
             text-decoration: none;
             color: var(--text-color);
             font-weight: 600;
             display: flex;
             align-items: center;
             transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            animation: popIn 0.5s ease-out forwards;
-            opacity: 0; /* Initially hidden for animation */
         }
-        
-        /* Staggered animation for initial buttons */
-        .link-button:nth-child(1) { animation-delay: 0.1s; }
-        .link-button:nth-child(2) { animation-delay: 0.2s; }
-        .link-button:nth-child(3) { animation-delay: 0.3s; }
-        .link-button:nth-child(4) { animation-delay: 0.4s; }
-        .link-button:nth-child(5) { animation-delay: 0.5s; }
-        .link-button:nth-child(6) { animation-delay: 0.6s; }
-        .link-button:nth-child(7) { animation-delay: 0.7s; }
-        .link-button:nth-child(8) { animation-delay: 0.8s; }
-        .link-button:nth-child(9) { animation-delay: 0.9s; }
-        .link-button:nth-child(10) { animation-delay: 1.0s; }
-        .link-button:nth-child(11) { animation-delay: 1.1s; }
-
 
         .link-button:hover {
-            transform: translateY(-8px) scale(1.02);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.4);
             background-color: #4a5568;
-        }
-
-        .link-button i {
-            font-size: 1.5rem;
-            margin-right: 15px;
-            width: 30px;
-            text-align: center;
-            color: var(--secondary-color);
+            border-color: var(--secondary-color);
         }
         
-        /* --- Form Section --- */
-        #add-link-section {
-            background: var(--card-background);
-            padding: 30px;
-            margin-top: 50px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        }
-
-        #add-link-section h2 {
-            font-family: var(--header-font);
+        .link-button i {
+            font-size: 1.2rem;
+            margin-right: 12px;
+            width: 20px;
             text-align: center;
             color: var(--primary-color);
-            margin-bottom: 20px;
-            font-size: 2rem;
         }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
+        
+        /* --- Placeholder Styling --- */
+        .placeholder-text {
             color: #a0aec0;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            font-size: 1.1rem;
         }
 
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            background: #1a202c;
-            border: 1px solid #4a5568;
-            border-radius: 8px;
-            color: var(--text-color);
-            font-family: var(--body-font);
-            font-size: 1rem;
-        }
-
-        #add-link-form button {
-            width: 100%;
-            padding: 15px;
-            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
-            color: var(--background-color);
-            border: none;
-            border-radius: 8px;
-            font-family: var(--header-font);
-            font-size: 1.3rem;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        #add-link-form button:hover {
-            transform: scale(1.02);
-            box-shadow: 0 5px 15px rgba(80, 227, 194, 0.4);
-        }
-        
         /* --- Animations --- */
         @keyframes fadeInDown {
             from { opacity: 0; transform: translateY(-30px); }
@@ -188,138 +161,93 @@
         }
 
         @keyframes popIn {
-            from { opacity: 0; transform: scale(0.5); }
+            from { opacity: 0; transform: scale(0.9); }
             to { opacity: 1; transform: scale(1); }
         }
 
-        /* For newly added buttons */
-        .newly-added {
-            animation: popIn 0.5s ease-out forwards !important;
-        }
-
-        /* --- Media Queries for Responsiveness --- */
+        /* --- Media Queries --- */
         @media (max-width: 768px) {
-            header h1 {
-                font-size: 2.5rem;
-            }
-            header p {
-                font-size: 1rem;
-            }
-            #link-grid {
-                grid-template-columns: 1fr;
-            }
+            .main-header h1 { font-size: 2.5rem; }
+            .subject-header h2 { font-size: 2rem; }
+            .subject-header i { font-size: 2rem; }
+            .link-grid { grid-template-columns: 1fr; }
         }
-
     </style>
 </head>
 <body>
 
     <div class="container">
-        <header>
+        <header class="main-header">
             <h1><i class="fa-solid fa-rocket"></i>PSLE Launchpad</h1>
-            <p>Your mission: to conquer the PSLE! Choose your module below to begin.</p>
+            <p>Select your subject and module to begin your revision mission!</p>
         </header>
 
         <main>
-            <!-- This is where the links will live -->
-            <div id="link-grid">
-                <a href="https://gittyhub2025.github.io/PSLErevision/CommonEnglishMistakes.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-person-chalkboard"></i> Common English Mistakes
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/Englishgrammar.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-spell-check"></i> English Grammar
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/ErrorEditing.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-pen-to-square"></i> Error Editing
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/Idioms1.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-lightbulb"></i> Idioms
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/PSLEScienceSystems&Cells.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-flask-vial"></i> Science: Systems & Cells
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/PSLESynthesis&Grammar.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-atom"></i> Synthesis & Grammar 1
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/PSLESynthesis&Grammar2.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-atom"></i> Synthesis & Grammar 2
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/PSLETransformationTechniques.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Transformation Techniques
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/PSLEVocabularyBuilder.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-book-open-reader"></i> Vocabulary Builder
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/SentenceTransformation.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-shuffle"></i> Sentence Transformation
-                </a>
-                <a href="https://gittyhub2025.github.io/PSLErevision/synthesis.html" target="_blank" rel="noopener noreferrer" class="link-button">
-                    <i class="fa-solid fa-puzzle-piece"></i> Synthesis Practice
-                </a>
-            </div>
+            <!-- English Section -->
+            <section class="subject-section">
+                <div class="subject-header">
+                    <i class="fa-solid fa-book-open"></i>
+                    <h2>English</h2>
+                </div>
+                <div class="link-grid">
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_ChallengingVocabs.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-star"></i> Challenging Vocabs</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_CommonMistakes.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-xmark"></i> Common Mistakes</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_ErrorEditing.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-pen-to-square"></i> Error Editing</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Idioms1.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-lightbulb"></i> Idioms</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_SentenceTransformation.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-shuffle"></i> Sentence Transformation</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Synthesis&Grammar.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-atom"></i> Synthesis & Grammar</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Synthesis&Grammar2.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-atom"></i> Synthesis & Grammar 2</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_TransformationTechniques.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-wand-magic-sparkles"></i> Transformation Techniques</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_VocabularyBuilder.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-book-open-reader"></i> Vocabulary Builder</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_grammar.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-spell-check"></i> Grammar</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_synthesis.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-puzzle-piece"></i> Synthesis</a>
+                </div>
+            </section>
+
+            <!-- Science Section -->
+            <section class="subject-section">
+                <div class="subject-header">
+                    <i class="fa-solid fa-flask-vial"></i>
+                    <h2>Science</h2>
+                </div>
+                <div class="link-grid">
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_CyclesMatters.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-recycle"></i> Cycles: Matters</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Cycles_Plants&Animals.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-seedling"></i> Cycles: Plants & Animals</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Diversity.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-dna"></i> Diversity</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_ElectricalSystems.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-bolt"></i> Electrical Systems</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_EnergyConversion.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-sun"></i> Energy Conversion</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_EnergyForms&Uses.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-lightbulb"></i> Energy Forms & Uses</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_HumanSystems.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-heart-pulse"></i> Human Systems</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_InteractionEnvironment.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-earth-asia"></i> Interaction with Environment</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_InteractionofForces.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-magnet"></i> Interaction of Forces</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_PlantSystems.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-leaf"></i> Plant Systems</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Systems&Cells.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-microscope"></i> Systems & Cells</a>
+                </div>
+            </section>
+
+            <!-- Math Section -->
+            <section class="subject-section">
+                <div class="subject-header">
+                    <i class="fa-solid fa-calculator"></i>
+                    <h2>Math</h2>
+                </div>
+                <div class="placeholder-text">
+                    <p>New math modules are being calculated... Coming Soon!</p>
+                </div>
+            </section>
+
+            <!-- Chinese Section -->
+            <section class="subject-section">
+                <div class="subject-header">
+                     <i class="fa-solid fa-language"></i>
+                    <h2>Chinese</h2>
+                </div>
+                <div class="placeholder-text">
+                    <p>New Chinese modules are on their way... Coming Soon!</p>
+                </div>
+            </section>
         </main>
-
-        <section id="add-link-section">
-            <h2><i class="fa-solid fa-plus-circle"></i> Add a New Module</h2>
-            <form id="add-link-form">
-                <div class="form-group">
-                    <label for="linkName">Module Name</label>
-                    <input type="text" id="linkName" name="linkName" placeholder="e.g., Advanced Science Quiz" required>
-                </div>
-                <div class="form-group">
-                    <label for="linkUrl">Module URL</label>
-                    <input type="url" id="linkUrl" name="linkUrl" placeholder="https://example.com/your-link" required>
-                </div>
-                <button type="submit">Create Module</button>
-            </form>
-        </section>
-
     </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const form = document.getElementById('add-link-form');
-            const linkGrid = document.getElementById('link-grid');
-            const nameInput = document.getElementById('linkName');
-            const urlInput = document.getElementById('linkUrl');
-
-            form.addEventListener('submit', (event) => {
-                // 1. Prevent the form from actually submitting and reloading the page
-                event.preventDefault();
-
-                // 2. Get the values from the input fields
-                const name = nameInput.value.trim();
-                const url = urlInput.value.trim();
-
-                // 3. Basic validation
-                if (!name || !url) {
-                    alert('Please fill in both the module name and the URL!');
-                    return;
-                }
-                
-                // 4. Create the new link element (<a> tag)
-                const newLink = document.createElement('a');
-                newLink.href = url;
-                newLink.className = 'link-button newly-added'; // Add classes for styling and animation
-                newLink.target = '_blank'; // Open link in a new tab
-                newLink.rel = 'noopener noreferrer'; // Security best practice
-
-                // 5. Create the inner content (icon and text)
-                // We use innerHTML for simplicity to add the icon and text together.
-                // Using a generic star icon for all new modules.
-                newLink.innerHTML = `<i class="fa-solid fa-star"></i> ${name}`;
-
-                // 6. Add the newly created button to the grid
-                linkGrid.appendChild(newLink);
-
-                // 7. Clear the form fields for the next entry
-                form.reset();
-                
-                // Optional: Scroll to the new button
-                newLink.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            });
-        });
-    </script>
 
 </body>
 </html>
