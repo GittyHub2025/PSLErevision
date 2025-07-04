@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Interaction of Forces</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-rose-200 via-pink-200 to-fuchsia-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-rose-700">Greetings, Force Master!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on the Interaction of Forces.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-rose-500 focus:border-rose-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-rose-500 hover:bg-rose-600 text-white w-full py-3 px-6 text-lg">Let's Go!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-rose-700 mb-2">PSLE Science: Interaction of Forces</h1>
+            <p class="text-slate-600 mb-8">Choose a set to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-rose-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-rose-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-rose-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-rose-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-rose-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-rose-500 hover:bg-rose-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleScienceForcesApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Interaction of Forces ---
+    const allFlashcardSets = {
+        "Set 1: Basic Force Concepts": [
+            { id: 'f1q1', question: "A force is a ___ or a ___.", options: ["Push or pull", "Light or sound", "Solid or liquid"], correctAnswer: "Push or pull", explanation: "A force is any interaction that, when unopposed, will change the motion of an object. It can be described as a push or a pull.", image: null },
+            { id: 'f1q2', question: "What is the force that pulls objects towards the center of the Earth?", options: ["Magnetic force", "Frictional force", "Gravitational force"], correctAnswer: "Gravitational force", explanation: "Gravity is the force of attraction between any two objects with mass. On Earth, it's what keeps us on the ground.", image: null },
+            { id: 'f1q3', question: "Which force opposes the motion of objects sliding against each other?", options: ["Gravity", "Friction", "Elastic force"], correctAnswer: "Friction", explanation: "Friction is a contact force that acts in the opposite direction of motion when two surfaces rub together.", image: null },
+            { id: 'f1q4', question: "Which of these materials will be attracted to a magnet?", options: ["Plastic cup", "Steel paperclip", "Wooden block"], correctAnswer: "Steel paperclip", explanation: "Magnets attract magnetic materials like iron, steel, nickel, and cobalt.", image: null },
+            { id: 'f1q5', question: "A magnet's like poles (e.g., North and North) will ___ each other.", options: ["Attract", "Repel", "Have no effect on"], correctAnswer: "Repel", explanation: "Like poles of a magnet push each other away, which is called repulsion.", image: null },
+            { id: 'f1q6', question: "The force exerted by a stretched or compressed spring is called ___.", options: ["Gravitational force", "Elastic spring force", "Frictional force"], correctAnswer: "Elastic spring force", explanation: "This force tries to return the spring to its original, un-stretched shape.", image: null },
+            { id: 'f1q7', question: "Unlike poles of a magnet (e.g., North and South) will ___ each other.", options: ["Attract", "Repel", "Destroy"], correctAnswer: "Attract", explanation: "Opposite poles of a magnet pull towards each other, which is called attraction.", image: null },
+            { id: 'f1q8', question: "Which of these is an example of a non-contact force?", options: ["Friction", "A push", "Magnetism"], correctAnswer: "Magnetism", explanation: "Non-contact forces, like magnetism and gravity, can act on an object without physically touching it.", image: null },
+            { id: 'f1q9', question: "What force helps a car's brakes to work?", options: ["Gravity", "Elastic force", "Friction"], correctAnswer: "Friction", explanation: "The brake pads press against the wheels, creating friction that slows the car down.", image: null },
+            { id: 'f1q10', question: "Every magnet has a North pole and a ___ pole.", options: ["East", "West", "South"], correctAnswer: "South", explanation: "Magnets are dipolar, meaning they always have two opposite poles, named North and South.", image: null },
+            { id: 'f1q11', question: "When you drop a ball, what force causes it to fall downwards?", options: ["Air resistance", "Gravity", "Elastic force"], correctAnswer: "Gravity", explanation: "The Earth's gravitational force pulls the ball towards the ground.", image: null },
+            { id: 'f1q12', question: "Stretching a rubber band stores what kind of energy?", options: ["Kinetic energy", "Elastic potential energy", "Gravitational potential energy"], correctAnswer: "Elastic potential energy", explanation: "When you stretch or compress an elastic object, you store energy in it that can be released later.", image: null },
+            { id: 'f1q13', question: "Which of these is a contact force?", options: ["Gravity", "Magnetism", "Friction"], correctAnswer: "Friction", explanation: "Contact forces require objects to be physically touching for the force to act, like friction between a box and the floor.", image: null },
+            { id: 'f1q14', question: "A compass needle points North because it is a small magnet interacting with ___.", options: ["The Sun's gravity", "The Earth's magnetic field", "The Moon"], correctAnswer: "The Earth's magnetic field", explanation: "The Earth acts like a giant magnet, and a compass needle aligns itself with this invisible magnetic field.", image: null },
+            { id: 'f1q15', question: "What is the weight of an object?", options: ["The amount of matter in it", "The force of gravity acting on it", "How big it is"], correctAnswer: "The force of gravity acting on it", explanation: "Mass is the amount of matter, while weight is the force of gravity pulling on that mass.", image: null },
+            { id: 'f1q16', question: "Rubbing your hands together on a cold day makes them warm. This is due to ___.", options: ["Gravity", "Friction", "Magnetism"], correctAnswer: "Friction", explanation: "The friction between your moving hands generates heat.", image: null },
+            { id: 'f1q17', "question": "What happens to the elastic spring force when a spring is compressed?", "options": ["It disappears", "It pushes outwards", "It pulls inwards"], "correctAnswer": "It pushes outwards", "explanation": "The compressed spring exerts an outward force to try and return to its original length.", "image": null},
+            { id: 'f1q18', "question": "Which force is always present between any two objects that have mass?", "options": ["Friction", "Gravitational force", "Elastic force"], "correctAnswer": "Gravitational force", "explanation": "Gravity is a universal force that exists between all objects with mass, although it's only noticeable for very large objects like planets.", "image": null},
+            { id: 'f1q19', "question": "To identify if an object is a magnet, you should test for ___.", "options": ["Attraction to iron", "Repulsion with another magnet", "Attraction to plastic"], "correctAnswer": "Repulsion with another magnet", "explanation": "Only another magnet can repel a magnet. Attraction can happen between a magnet and a magnetic material (like iron), so repulsion is the only sure test for magnetism.", "image": null},
+            { id: 'f1q20', "question": "A force can change an object's speed, direction, or ___.", "options": ["Mass", "Shape", "Colour"], "correctAnswer": "Shape", "explanation": "Forces can deform objects, for example, by squeezing a sponge or stretching a rubber band.", "image": null}
+        ],
+        "Set 2: Factors & Applications": [
+            { id: 'f2q1', question: "How can you increase the friction between a shoe and the ground?", options: ["Make the shoe sole smoother", "Make the shoe sole rougher", "Put oil on the sole"], correctAnswer: "Make the shoe sole rougher", explanation: "Rougher surfaces have more points of contact and interlocking bumps, which increases the amount of friction.", image: null },
+            { id: 'f2q2', question: "The more mass an object has, the ___ the gravitational force on it.", options: ["Weaker", "Stronger", "The same"], correctAnswer: "Stronger", explanation: "The force of gravity is directly proportional to the mass of the objects. More mass means a stronger gravitational pull (and more weight).", image: null },
+            { id: 'f2q3', "question": "Why do F1 cars have a streamlined shape?", "options": ["To increase friction", "To reduce air resistance", "To look cool"], "correctAnswer": "To reduce air resistance", "explanation": "Air resistance is a type of friction that slows objects moving through the air. A streamlined shape allows air to flow over it smoothly, reducing this force.", "image": null},
+            { id: 'f2q4', "question": "If you stretch a spring by 2 cm and then by 4 cm, the elastic force at 4 cm is ___.", "options": ["The same", "Weaker", "Stronger"], "correctAnswer": "Stronger", "explanation": "The further a spring is stretched or compressed from its original position, the greater the elastic force it exerts to return to that position.", "image": null},
+            { id: 'f2q5', question: "What is the best way to test the strength of different bar magnets?", options: ["See which one is bigger", "Count the maximum number of paper clips each can hold in a chain", "See which one is heavier"], correctAnswer: "Count the maximum number of paper clips each can hold in a chain", explanation: "This provides a measurable, quantitative way to compare their magnetic force. The magnet that can support a longer chain against gravity is stronger.", image: null },
+            { id: 'f2q6', "question": "Which of the following will decrease friction?", "options": ["Pressing surfaces together harder", "Adding sand between surfaces", "Using a lubricant like oil"], "correctAnswer": "Using a lubricant like oil", "explanation": "Lubricants create a thin, smooth layer between surfaces, which reduces the direct rubbing contact and therefore decreases friction.", "image": null},
+            { id: 'f2q7', question: "Your weight would be less on the Moon than on Earth because the Moon ___.", options: ["Is smaller and has less mass", "Has no air", "Is farther from the Sun"], correctAnswer: "Is smaller and has less mass", explanation: "The Moon's smaller mass results in a weaker gravitational pull. Your mass (the 'stuff' you're made of) would be the same.", image: null },
+            { id: 'f2q8', "question": "When a spring is used in a weighing scale, it measures an object's weight by balancing it against the ___.", "options": ["Magnetic force", "Elastic spring force", "Frictional force"], "correctAnswer": "Elastic spring force", "explanation": "The scale works when the downward pull of gravity (weight) is equal to the upward pull of the stretched spring. The amount of stretch indicates the weight.", "image": null},
+            { id: 'f2q9', "question": "Why is it easier to push a heavy box on wheels than to slide it?", "options": ["The wheels reduce the box's mass", "The wheels use gravity to help", "Rolling friction is much less than sliding friction"], "correctAnswer": "Rolling friction is much less than sliding friction", "explanation": "Wheels replace the high-friction sliding motion with a much lower-friction rolling motion, making it easier to move the object.", "image": null},
+            { id: 'f2q10', "question": "How can an iron nail be turned into a temporary magnet?", "options": ["By heating it", "By stroking it with a magnet in one direction", "By dropping it"], "correctAnswer": "By stroking it with a magnet in one direction", "explanation": "This process, called induction, aligns the tiny magnetic domains inside the iron nail, causing it to become a magnet itself.", "image": null},
+            { id: 'f2q11', "question": "An object thrown upwards slows down, stops, and falls back down. The force causing it to slow down and fall is ___.", "options": ["Friction", "The initial push", "Gravity"], "correctAnswer": "Gravity", "explanation": "Gravity constantly pulls the object downwards. This downward force opposes the upward motion, slowing it down, and then pulls it back to Earth.", "image": null},
+            { id: 'f2q12', question: "If you cut a bar magnet in half, what do you get?", options: ["One North pole and one South pole", "Two smaller magnets, each with a North and South pole", "Two unmagnetized pieces"], correctAnswer: "Two smaller magnets, each with a North and South pole", explanation: "Magnetic poles always exist in pairs. You can never isolate a single North or South pole.", image: null },
+            { id: 'f2q13', question: "Which of these is a useful application of friction?", options: ["Wearing out engine parts", "Writing with a pencil", "Slowing down a satellite"], correctAnswer: "Writing with a pencil", explanation: "Friction between the pencil lead and the paper allows the graphite to rub off and leave a mark.", image: null },
+            { id: 'f2q14', question: "Which force does not require a medium to travel through?", options: ["Sound", "Friction", "Gravity"], correctAnswer: "Gravity", explanation: "Gravitational force can act across the vacuum of space, which is how the Sun holds the Earth in orbit.", image: null },
+            { id: 'f2q15', "question": "Two identical springs are used. Spring A is stretched by 5 cm and Spring B is stretched by 10 cm. Spring B stores ___ elastic potential energy.", "options": ["less", "the same", "more"], "correctAnswer": "more", "explanation": "The more a spring is stretched, the more work is done on it, and therefore the more elastic potential energy it stores.", "image": null},
+            { id: 'f2q16', "question": "The region around a magnet where its force can be felt is called its ___.", "options": ["Magnetic area", "Magnetic field", "Magnetic zone"], "correctAnswer": "Magnetic field", "explanation": "A magnetic field is the invisible area of influence surrounding a magnet.", "image": null},
+            { id: 'f2q17', "question": "Air resistance is a type of ___.", "options": ["Gravity", "Friction", "Magnetism"], "correctAnswer": "Friction", "explanation": "Air resistance is the frictional force that air exerts against a moving object.", "image": null},
+            { id: 'f2q18', "question": "Which of these does NOT affect the force of friction between a block and a table?", "options": ["The roughness of the surfaces", "How hard the block is pressed down", "The colour of the block"], "correctAnswer": "The colour of the block", "explanation": "Friction depends on the nature of the surfaces and the force pressing them together, not on properties like colour.", "image": null},
+            { id: 'f2q19', "question": "Why does a feather fall slower than a stone?", "options": ["The stone has more gravity", "The feather is lighter", "The feather experiences more air resistance"], "correctAnswer": "The feather experiences more air resistance", "explanation": "The feather's large surface area and low mass mean that the upward force of air resistance has a much greater effect on it, slowing its fall.", "image": null},
+            { id: 'f2q20', "question": "Magnets are used in a junkyard crane to lift scrap metal. Which metals will it pick up?", "options": ["Iron and steel", "Aluminium and copper", "All metals"], "correctAnswer": "Iron and steel", "explanation": "The crane's electromagnet will only attract and pick up ferromagnetic materials like iron and steel.", "image": null}
+        ],
+        "Set 3: Forces in Systems": [
+            { id: 'f3q1', question: "A book is at rest on a table. What can we say about the forces acting on it?", options: ["There are no forces", "The forces are balanced", "Gravity is the only force"], correctAnswer: "The forces are balanced", explanation: "Gravity pulls the book down, and the table pushes up with an equal and opposite force (normal force). The forces cancel out, so the book doesn't move.", image: null },
+            { id: 'f3q2', question: "A car is moving at a constant speed on a straight road. This means the forward force from the engine is ___ the total backward force of friction and air resistance.", options: ["greater than", "less than", "equal to"], correctAnswer: "equal to", explanation: "For an object to move at a constant velocity (constant speed and direction), all the forces acting on it must be balanced. Unbalanced forces cause acceleration.", image: null },
+            { id: 'f3q3', "question": "A parachutist falls at a constant speed (terminal velocity). This means the force of gravity is balanced by the force of ___.", "options": ["her weight", "air resistance", "her push"], "correctAnswer": "air resistance", "explanation": "At terminal velocity, the downward pull of gravity is exactly equal to the upward push of air resistance, so the net force is zero and she stops accelerating.", "image": null},
+            { id: 'f3q4', "question": "On the Moon, where there is no air, if you drop a hammer and a feather at the same time, they will ___.", "options": ["land at the same time", "the hammer will land first", "the feather will land first"], "correctAnswer": "land at the same time", "explanation": "Without air resistance to slow the feather down, both objects accelerate downwards due to gravity at the same rate and will hit the ground simultaneously.", "image": null},
+            { id: 'f3q5', "question": "A toy car rolls down a ramp and then across a rough carpet. What force causes it to slow down and stop on the carpet?", "options": ["Gravity", "Friction", "Elastic force"], "correctAnswer": "Friction", "explanation": "While gravity pulled it down the ramp, the force of friction between the wheels and the carpet opposes its motion and brings it to a stop.", "image": null},
+            { id: 'f3q6', "question": "An object is pulled by a spring balance across a rough floor. The spring reads 5 N. If the object moves at a constant speed, what is the force of friction?", "options": ["Less than 5 N", "Exactly 5 N", "More than 5 N"], "correctAnswer": "Exactly 5 N", "explanation": "For the object to move at a constant speed, the forces must be balanced. The forward pull of the spring (5 N) must be equal to the backward pull of friction.", "image": null},
+            { id: 'f3q7', "question": "A satellite stays in orbit around the Earth because the Earth's ___ provides the force needed to continuously change its direction.", "options": ["magnetic field", "gravitational pull", "atmosphere"], "correctAnswer": "gravitational pull", "explanation": "Gravity acts as the 'centripetal force' that constantly pulls the satellite towards Earth, preventing it from flying off in a straight line into space.", "image": null},
+            { id: 'f3q8', "question": "You push a heavy box, but it does not move. Why?", "options": ["The force of gravity is too strong", "The force of friction is equal to your push", "The box has no wheels"], "correctAnswer": "The force of friction is equal to your push", "explanation": "The static friction between the box and the floor is acting in the opposite direction with a force equal to your push, resulting in balanced forces and no movement.", "image": null},
+            { id: 'f3q9', "question": "Two forces of 10 N and 8 N act on an object in opposite directions. What is the net (resultant) force on the object?", "options": ["18 N", "2 N", "10 N"], "correctAnswer": "2 N", "explanation": "When forces act in opposite directions, you subtract the smaller force from the larger one. The net force is 10 N - 8 N = 2 N, in the direction of the larger force.", "image": null},
+            { id: 'f3q10', "question": "To design an experiment to find which surface produces the most friction, you could measure the ___ to pull a block across each surface.", "options": ["force needed", "time taken", "colour of the surface"], "correctAnswer": "force needed", "explanation": "Using a spring balance, the surface that requires the largest force to pull the block at a constant speed is the one with the most friction.", "image": null},
+            { id: 'f3q11', "question": "A bouncing ball hits the ground and squashes slightly before bouncing back up. What two main forces interact during the bounce?", "options": ["Friction and Magnetism", "Gravity and Elastic force", "Gravity and Friction"], "correctAnswer": "Gravity and Elastic force", "explanation": "Gravity pulls the ball down. When it hits the ground, the ball deforms, creating an upward elastic force that pushes it back into the air.", "image": null},
+            { id: 'f3q12', "question": "If an object is accelerating, the forces acting on it must be ___.", "options": ["Balanced", "Unbalanced", "Zero"], "correctAnswer": "Unbalanced", "explanation": "Acceleration (a change in speed or direction) is caused by a net or resultant force. If the forces were balanced, the object's motion would not change.", "image": null},
+            { id: 'f3q13', "question": "A powerful magnet is trying to lift a large steel ball. The ball does not move. This means the magnetic force is ___ the gravitational force on the ball.", "options": ["greater than", "less than or equal to", "zero"], "correctAnswer": "less than or equal to", "explanation": "For the magnet to lift the ball, its upward pull must be greater than the downward pull of gravity (weight). If it's not moving, the magnetic force is not yet strong enough to overcome gravity.", "image": null},
+            { id: 'f3q14', "question": "Why is it difficult to walk on a very icy path?", "options": ["The ice is too cold", "There is very little friction between your shoes and the ice", "Gravity is weaker on ice"], "correctAnswer": "There is very little friction between your shoes and the ice", "explanation": "Walking requires friction to push off the ground. The smooth surface of ice provides very little grip (friction), making it easy to slip.", "image": null},
+            { id: 'f3q15', "question": "When a rocket launches, it pushes hot gas downwards. What force pushes the rocket upwards?", "options": ["Gravity", "Air pressure", "The upward push from the gas (thrust)"], "correctAnswer": "The upward push from the gas (thrust)", "explanation": "This is Newton's Third Law. The rocket exerts a downward force on the gas, and the gas exerts an equal and opposite upward force (thrust) on the rocket.", "image": null},
+            { id: 'f3q16', "question": "An arrow is shot from a bow. The energy stored in the stretched bow is converted into ___ energy of the arrow.", "options": ["elastic potential; kinetic", "gravitational; kinetic", "kinetic; potential"], "correctAnswer": "elastic potential; kinetic", "explanation": "Stretching the bow stores elastic potential energy. When released, this energy is transferred to the arrow as kinetic energy (energy of motion).", "image": null},
+            { id: 'f3q17', "question": "A boat floats on water. The downward force of gravity is balanced by an upward force from the water called ___.", "options": ["Friction", "Water tension", "Upthrust"], "correctAnswer": "Upthrust", "explanation": "Upthrust is the upward force exerted by a fluid that opposes the weight of an immersed object. For the boat to float, gravity and upthrust must be equal.", "image": null},
+            { id: 'f3q18', "question": "If you hang a 1 kg mass and a 2 kg mass from identical springs, the spring with the 2 kg mass will stretch ___.", "options": ["less", "the same amount", "more"], "correctAnswer": "more", "explanation": "The 2 kg mass has a greater weight (more gravitational force). To balance this greater force, the spring must exert a greater elastic force, which means it has to stretch more.", "image": null},
+            { id: 'f3q19', "question": "To separate a mixture of sand, salt, and iron filings, a magnet can be used to remove the ___.", "options": ["Sand", "Salt", "Iron filings"], "correctAnswer": "Iron filings", "explanation": "In this system, only the iron filings are magnetic. The magnet provides a non-contact force that can pull the iron out, leaving the other substances behind.", "image": null},
+            { id: 'f3q20', "question": "A cyclist speeds up. This means the force from pedalling is ___ the forces of air resistance and friction.", "options": ["equal to", "less than", "greater than"], "correctAnswer": "greater than", "explanation": "To accelerate (speed up), there must be a net forward force. This means the forward thrust from pedalling must be stronger than the backward resistive forces.", "image": null}
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-rose-500 hover:bg-rose-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered this topic!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
