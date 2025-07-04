@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Interactions within the Environment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-yellow-200 via-orange-200 to-red-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-orange-700">Welcome, Science Explorer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on Interactions within the Environment.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-orange-500 focus:border-orange-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6 text-lg">Start Exploring!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-orange-700 mb-2">PSLE Science: Interactions</h1>
+            <p class="text-slate-600 mb-8">Choose a topic to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-orange-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-orange-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-orange-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-orange-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-orange-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleScienceInteractionsApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Interactions within the Environment ---
+    const allFlashcardSets = {
+        "Set 1: Basic Definitions & Food Chains": [
+            { id: 'i1q1', question: "What is the natural home or environment of an animal, plant, or other organism?", options: ["Community", "Population", "Habitat"], correctAnswer: "Habitat", explanation: "A habitat is the specific place where an organism lives and finds the food, water, and shelter it needs to survive.", image: null },
+            { id: 'i1q2', question: "An organism that makes its own food, usually using sunlight, is called a ___.", options: ["Consumer", "Producer", "Decomposer"], correctAnswer: "Producer", explanation: "Producers, such as plants, form the base of the food chain because they produce their own food through photosynthesis.", image: null },
+            { id: 'i1q3', question: "In the food chain: grass → rabbit → fox, the rabbit is a ___.", options: ["Producer", "Herbivore", "Carnivore"], correctAnswer: "Herbivore", explanation: "A herbivore is an animal that eats only plants. The rabbit eats grass, so it is a herbivore and a primary consumer.", image: null },
+            { id: 'i1q4', question: "All the living and non-living things interacting in a particular area form a(n) ___.", options: ["Ecosystem", "Population", "Food chain"], correctAnswer: "Ecosystem", explanation: "An ecosystem includes all organisms (the community) and the physical environment (like water, soil, air, sunlight) they interact with.", image: null },
+            { id: 'i1q5', question: "Which of these is a non-living part of a forest ecosystem?", options: ["Mushroom", "Fern", "Sunlight"], correctAnswer: "Sunlight", explanation: "Sunlight, soil, water, and air are non-living (abiotic) components, while mushrooms and ferns are living (biotic) components.", image: null },
+            { id: 'i1q6', question: "A group of organisms of the same species living in the same area is a ___.", options: ["Community", "Population", "Habitat"], correctAnswer: "Population", explanation: "For example, all the squirrels in a park make up the squirrel population. A community includes all the different populations.", image: null },
+            { id: 'i1q7', question: "An organism that eats other organisms to get energy is a ___.", options: ["Consumer", "Producer", "Decomposer"], correctAnswer: "Consumer", explanation: "Consumers cannot make their own food, so they must consume (eat) other organisms. Animals are consumers.", image: null },
+            { id: 'i1q8', question: "The cutting down of large areas of forests is known as ___.", options: ["Pollution", "Conservation", "Deforestation"], correctAnswer: "Deforestation", explanation: "Deforestation destroys habitats and has a major negative impact on many ecosystems and the global climate.", image: null },
+            { id: 'i1q9', question: "An animal that hunts and kills other animals for food is a(n) ___.", options: ["Prey", "Predator", "Producer"], correctAnswer: "Predator", explanation: "A predator is a hunter. For example, a lion is a predator that hunts prey like zebras.", image: null },
+            { id: 'i1q10', question: "The animal that is hunted and killed for food is the ___.", options: ["Prey", "Predator", "Consumer"], correctAnswer: "Prey", explanation: "The prey is the organism that gets eaten. For example, a mouse is prey for a cat.", image: null },
+            { id: 'i1q11', question: "What is the primary source of energy for almost all ecosystems on Earth?", options: ["The Moon", "The Sun", "Water"], correctAnswer: "The Sun", explanation: "The sun's light energy is captured by producers (plants) and then transferred through the food chain as other organisms eat the plants.", image: null },
+            { id: 'i1q12', question: "Which of these is an example of a decomposer?", options: ["Grass", "Lion", "Mushroom"], correctAnswer: "Mushroom", explanation: "Decomposers like fungi (mushrooms) and bacteria break down dead organisms, returning nutrients to the soil.", image: null },
+            { id: 'i1q13', question: "An animal that eats both plants and other animals is a(n) ___.", options: ["Herbivore", "Carnivore", "Omnivore"], correctAnswer: "Omnivore", explanation: "Omnivores have a varied diet. Humans, bears, and chickens are examples of omnivores.", image: null },
+            { id: 'i1q14', question: "The path of energy from one living thing to another is shown by a ___.", options: ["Food web", "Food chain", "Life cycle"], correctAnswer: "Food chain", explanation: "A food chain shows a single pathway of energy transfer, for example: leaf → caterpillar → bird.", image: null },
+            { id: 'i1q15', question: "The introduction of harmful substances into the environment is called ___.", options: ["Decomposition", "Pollution", "Competition"], correctAnswer: "Pollution", explanation: "Pollution can affect the air, water, and land, harming living organisms and damaging ecosystems.", image: null },
+            { id: 'i1q16', question: "Which of these correctly shows the direction of energy flow in a food chain?", options: ["Fox → Rabbit → Grass", "Grass → Rabbit → Fox", "Rabbit → Fox → Grass"], correctAnswer: "Grass → Rabbit → Fox", explanation: "The arrow points from the organism being eaten to the organism that eats it, showing the direction that energy is transferred.", image: null },
+            { id: 'i1q17', question: "All the different populations of organisms living together in a habitat make up a ___.", options: ["Community", "Ecosystem", "Species"], correctAnswer: "Community", explanation: "A pond community would include populations of fish, water lilies, frogs, dragonflies, and all other living things there.", image: null },
+            { id: 'i1q18', question: "Which human activity helps the environment?", options: ["Littering", "Planting trees", "Using lots of plastic bags"], correctAnswer: "Planting trees", explanation: "Planting trees (reforestation) helps provide habitats, clean the air, and prevent soil erosion.", image: null },
+            { id: 'i1q19', question: "A carnivore is an animal that eats only ___.", options: ["Plants", "Other animals", "Plants and animals"], correctAnswer: "Other animals", explanation: "Carnivores are meat-eaters. Examples include lions, sharks, and eagles.", image: null },
+            { id: 'i1q20', question: "What is the role of decomposers in an ecosystem?", options: ["To make food", "To be food for producers", "To break down dead matter"], correctAnswer: "To break down dead matter", explanation: "Decomposers are nature's recyclers. They break down dead plants and animals, returning essential nutrients to the soil for producers to use.", image: null }
+        ],
+        "Set 2: Ecosystems & Relationships": [
+            { id: 'i2q1', question: "Several interconnected food chains in an ecosystem form a ___.", options: ["Food web", "Food pyramid", "Food circle"], correctAnswer: "Food web", explanation: "A food web is more realistic than a food chain because most animals eat more than one type of food, creating multiple connections.", image: null },
+            { id: 'i2q2', question: "If a disease suddenly kills most of the rabbits in a field, which population is likely to decrease due to starvation?", options: ["Grass", "Foxes", "Mice"], correctAnswer: "Foxes", explanation: "Foxes prey on rabbits. A sharp decrease in their primary food source would lead to starvation and a decrease in the fox population.", image: null },
+            { id: 'i2q3', question: "In a forest, both squirrels and chipmunks eat acorns. This is an example of ___.", options: ["Competition", "Predation", "Decomposition"], correctAnswer: "Competition", explanation: "Competition occurs when two or more organisms need the same limited resource, such as food, water, or shelter.", image: null },
+            { id: 'i2q4', "question": "A chameleon changing its colour to blend in with a tree is an example of which adaptation?", options: ["Mimicry", "Camouflage", "Hibernation"], correctAnswer: "Camouflage", explanation: "Camouflage is a structural adaptation that helps an organism blend in with its surroundings, either to avoid predators or to ambush prey.", image: null },
+            { id: 'i2q5', question: "What would happen to the nutrients in a dead tree if there were no decomposers?", options: ["The nutrients would disappear forever", "The nutrients would remain locked in the dead tree", "Plants would absorb the nutrients directly"], correctAnswer: "The nutrients would remain locked in the dead tree", explanation: "Decomposers are essential for breaking down complex dead matter and releasing simple nutrients back into the ecosystem for plants to use.", image: null },
+            { id: 'i2q6', question: "In the food web, if the population of snakes increases, what might happen to the frog population?", options: ["It will increase", "It will decrease", "It will not change"], correctAnswer: "It will decrease", explanation: "If snakes eat frogs, an increase in the number of predators (snakes) will lead to more frogs being eaten, causing the frog population to decrease.", image: null },
+            { id: 'i2q7', question: "Which organism is both a predator and a prey?", options: ["Grass (a producer)", "A frog (eats insects, eaten by snakes)", "A lion (a top predator)"], correctAnswer: "A frog (eats insects, eaten by snakes)", explanation: "Many animals are in the middle of a food chain. A frog is a predator to insects but is prey for snakes, making it both.", image: null },
+            { id: 'i2q8', question: "Why are there fewer organisms at the top of a food pyramid than at the bottom?", options: ["Energy is lost at each level", "Top predators reproduce slowly", "They are bigger in size"], correctAnswer: "Energy is lost at each level", explanation: "Only about 10% of the energy from one level is transferred to the next. This means there is less available energy to support large populations at higher levels.", image: null },
+            { id: 'i2q9', question: "An oil spill in the ocean is a form of pollution that immediately affects ___.", options: ["desert animals", "marine birds and fish", "forest trees"], correctAnswer: "marine birds and fish", explanation: "Oil coats the feathers of birds and the gills of fish, preventing them from flying, keeping warm, or breathing properly, causing immense harm to the marine ecosystem.", image: null },
+            { id: 'i2q10', question: "The process of protecting and preserving natural resources and the environment is called ___.", options: ["Conservation", "Deforestation", "Pollution"], correctAnswer: "Conservation", explanation: "Conservation efforts include creating national parks, protecting endangered species, and practicing the 3Rs (Reduce, Reuse, Recycle).", image: null },
+            { id: 'i2q11', question: "A non-native animal is introduced to an ecosystem. It has no natural predators. What is a likely result?", options: ["It will die out quickly", "It will become an invasive species and harm the ecosystem", "It will become a new producer"], correctAnswer: "It will become an invasive species and harm the ecosystem", explanation: "Without predators to control its numbers, the invasive species can multiply rapidly, outcompeting native organisms for food and resources.", image: null },
+            { id: 'i2q12', question: "In a pond ecosystem, which of these is an example of interdependence?", options: ["A fish breathing underwater", "A frog and a dragonfly living in the same pond", "Small fish eating algae and big fish eating small fish"], correctAnswer: "Small fish eating algae and big fish eating small fish", explanation: "Interdependence means organisms rely on each other. The big fish depends on the small fish for food, and the small fish depends on the algae.", image: null },
+            { id: 'i2q13', question: "Why do some desert plants have long roots?", options: ["To anchor them in strong winds", "To reach water deep underground", "To store more food"], correctAnswer: "To reach water deep underground", explanation: "This is a structural adaptation. In a dry environment, long roots are necessary to find and absorb water from deep within the soil.", image: null },
+            { id: 'i2q14', question: "Burning fossil fuels releases gases like carbon dioxide, which contributes to ___.", options: ["a stronger ozone layer", "global warming", "cleaner air"], correctAnswer: "global warming", explanation: "Carbon dioxide is a greenhouse gas that traps heat in the atmosphere, leading to a gradual increase in the Earth's average temperature, known as global warming.", image: null },
+            { id: 'i2q15', question: "Which statement about food webs is true?", options: ["They show only one path of energy flow", "An organism can only be at one level", "They show that organisms can have multiple food sources"], correctAnswer: "They show that organisms can have multiple food sources", explanation: "Food webs are complex and show the many different feeding relationships between organisms in an ecosystem, making them more stable than simple food chains.", image: null },
+            { id: 'i2q16', question: "A Viceroy butterfly looks very similar to a poisonous Monarch butterfly. This helps the Viceroy avoid predators. This is an example of ___.", options: ["Camouflage", "Mimicry", "Competition"], correctAnswer: "Mimicry", explanation: "Mimicry is when a harmless species evolves to look like a dangerous or poisonous species as a form of protection.", image: null },
+            { id: 'i2q17', question: "Overfishing in an area of the ocean can lead to ___.", options: ["an increase in fish populations", "a collapse of the marine food web", "cleaner ocean water"], correctAnswer: "a collapse of the marine food web", explanation: "Removing too many of a particular fish species disrupts the food web, affecting both their predators (who starve) and their prey (which may overpopulate).", image: null },
+            { id: 'i2q18', question: "A farmer uses too much fertilizer, which then washes into a nearby lake. What is a likely effect?", options: ["The fish in the lake will grow bigger", "An overgrowth of algae, which harms aquatic life", "The lake water will become good to drink"], correctAnswer: "An overgrowth of algae, which harms aquatic life", explanation: "The excess nutrients from the fertilizer cause a rapid growth of algae (algal bloom). When the algae die and decompose, they use up the oxygen in the water, killing fish.", image: null },
+            { id: 'i2q19', question: "Why is biodiversity (a wide variety of different species) important for an ecosystem?", options: ["It makes the ecosystem more stable", "It ensures there is only one top predator", "It makes the ecosystem look nice"], correctAnswer: "It makes the ecosystem more stable", explanation: "A biodiverse ecosystem is more resilient. If one food source is affected by disease, organisms have other food options, preventing the entire food web from collapsing.", image: null },
+            { id: 'i2q20', question: "A bear eating berries in summer and fish in the fall shows that it is a(n) ___.", options: ["omnivore with a seasonal diet", "herbivore that adapts", "carnivore that stores food"], correctAnswer: "omnivore with a seasonal diet", explanation: "As an omnivore, the bear adapts its diet based on what food is available during different seasons, eating both plants (berries) and animals (fish).", image: null }
+        ],
+        "Set 3: System Analysis & Human Impact": [
+            { id: 'i3q1', question: "In a food web, a toxin is sprayed on plants. Which organism would likely have the highest concentration of the toxin in its body?", options: ["The plant", "The herbivore that eats the plant", "The carnivore that eats the herbivore"], correctAnswer: "The carnivore that eats the herbivore", explanation: "This is called biomagnification. The toxin accumulates at each level of the food chain, so the top predator has the highest concentration.", image: null },
+            { id: 'i3q2', question: "A disease wipes out a population of primary consumers. What is the most likely immediate effect on the ecosystem?", options: ["Producers will decrease; secondary consumers will increase", "Producers will increase; secondary consumers will decrease", "Producers and decomposers will decrease"], correctAnswer: "Producers will increase; secondary consumers will decrease", explanation: "Fewer primary consumers mean less predation on producers (plants), so they increase. Secondary consumers lose their food source, so they decrease.", image: null },
+            { id: 'i3q3', question: "Deforestation can lead to soil erosion. This negatively impacts a nearby river by ___.", options: ["making the river water clearer", "making the river water muddy and harming aquatic life", "increasing the number of fish in the river"], correctAnswer: "making the river water muddy and harming aquatic life", explanation: "Tree roots hold soil in place. Without them, soil washes into the river, blocking sunlight for aquatic plants and clogging the gills of fish.", image: null },
+            { id: 'i3q4', question: "To create a self-sustaining sealed ecosphere (like a small aquarium in a jar), which combination of organisms is most essential?", options: ["A fish and a snail", "A plant, a snail, and decomposers", "A fish, a plant, and a rock"], correctAnswer: "A plant, a snail, and decomposers", explanation: "You need a producer (plant) for food/oxygen, a consumer (snail) for CO₂/waste, and decomposers (bacteria in the water) to recycle waste back into nutrients for the plant.", image: null },
+            { id: 'i3q5', question: "If the Earth's average temperature continues to rise (global warming), what is a likely consequence for polar bears?", options: ["They will adapt to eat plants", "Their hunting ground (sea ice) will shrink, threatening their survival", "They will hibernate for longer periods"], correctAnswer: "Their hunting ground (sea ice) will shrink, threatening their survival", explanation: "Polar bears rely on sea ice to hunt seals, their primary food. As the ice melts, their ability to find food is severely reduced, which endangers their population.", image: null },
+            { id: 'i3q6', "question": "Why is 'reusing' considered better for the environment than 'recycling'?", options: ["Reusing saves the energy needed to dismantle and remake products", "Reusing creates more jobs than recycling", "Recycling facilities cause a lot of pollution"], correctAnswer: "Reusing saves the energy needed to dismantle and remake products", explanation: "Recycling is good, but it still requires significant energy and resources to transport, break down, and remanufacture items. Reusing an item in its current form saves all that energy.", image: null },
+            { id: 'i3q7', question: "A logging company plants one new tree for every tree it cuts down. Why might this still be harmful to the forest community?", options: ["The new trees might be of a single species, reducing biodiversity", "The new trees will grow too fast", "The new trees might not be green"], correctAnswer: "The new trees might be of a single species, reducing biodiversity", explanation: "A natural forest has a wide variety of plants and trees, supporting many different animals. A single-species tree farm (monoculture) cannot support the same level of biodiversity.", image: null },
+            { id: 'i3q8', question: "A prolonged drought hits a grassland ecosystem. How does this non-living factor affect the entire food web?", options: ["It only affects the plants", "It causes a collapse, starting with the death of producers", "It helps the predators by making prey easier to find"], correctAnswer: "It causes a collapse, starting with the death of producers", explanation: "The drought (non-living factor) kills the grass (producers). This leads to starvation for the herbivores, which in turn leads to starvation for the carnivores. The entire system is affected.", image: null },
+            { id: 'i3q9', question: "Acid rain, caused by air pollution, lowers the pH of a lake, killing many small insects. What is a probable secondary effect?", options: ["The lake will become cleaner", "The population of fish that eat those insects will decline", "Trees around the lake will grow faster"], correctAnswer: "The population of fish that eat those insects will decline", explanation: "This shows the cascading effect of pollution. The initial impact on insects leads to a secondary impact on their predators (fish) due to a loss of their food source.", image: null },
+            { id: 'i3q10', question: "In a food web, an organism that eats both producers and primary consumers is called a(n) ___.", options: ["Apex predator", "Omnivore at the secondary consumer level", "Herbivore and a carnivore"], correctAnswer: "Omnivore at the secondary consumer level", explanation: "By eating producers (plants), it acts as a primary consumer. By eating primary consumers (herbivores), it acts as a secondary consumer. This makes it an omnivore.", image: null },
+            { id: 'i3q11', question: "The construction of a large dam can provide clean energy but harm the ecosystem by ___.", options: ["increasing the water temperature", "blocking fish migration and changing water flow downstream", "adding nutrients to the water"], correctAnswer: "blocking fish migration and changing water flow downstream", explanation: "Dams create a physical barrier for fish like salmon that need to travel upstream to reproduce. They also alter the natural flow and sediment of the river, affecting life downstream.", image: null },
+            { id: 'i3q12', question: "Why would a field with many different types of flowering plants likely support a more diverse community of insects than a field with only one type of grass?", options: ["It provides varied food sources and habitats", "The grass field is too green", "The flowers use up all the water"], correctAnswer: "It provides varied food sources and habitats", explanation: "Greater producer diversity leads to greater consumer diversity. Different plants support different insects, which in turn support different predators, creating a more complex and stable food web.", image: null },
+            { id: 'i3q13', question: "If all decomposers were to suddenly disappear, what would be the most significant long-term problem?", options: ["There would be too many predators", "The accumulation of dead organic matter and lack of nutrients for plants", "The air would run out of carbon dioxide"], correctAnswer: "The accumulation of dead organic matter and lack of nutrients for plants", explanation: "Without decomposers, dead material would pile up, and the vital nutrients (like nitrogen and phosphorus) within them would not be recycled for producers to use, eventually halting all growth.", image: null },
+            { id: 'i3q14', question: "A city expands, paving over a large wetland area. What essential ecosystem service is lost?", options: ["A source of fresh fish", "Natural water filtration and flood control", "A place for building more houses"], correctAnswer: "Natural water filtration and flood control", explanation: "Wetlands act like natural sponges. They absorb excess rainwater, preventing floods, and filter pollutants from the water, which are vital services lost when they are destroyed.", image: null },
+            { id: 'i3q15', question: "A student observes that a garden has worms, beetles, and birds. To confirm they are part of the same food web, the student must observe them ___.", options: ["living in the same area", "interacting through feeding", "being active at the same time of day"], correctAnswer: "interacting through feeding", explanation: "A food web is defined by feeding relationships. The student must observe, for example, the bird eating the worm, to establish a direct link in the web.", image: null },
+            { id: 'i3q16', question: "An increase in atmospheric carbon dioxide can be absorbed by oceans, but this causes the water to become more acidic. This is a problem because...", options: ["acidic water tastes sour", "it can dissolve the shells of organisms like corals and clams", "it helps fish breathe better"], correctAnswer: "it can dissolve the shells of organisms like corals and clams", explanation: "Ocean acidification prevents shell-forming organisms from building their protective homes. This has devastating effects on coral reefs and the many species that depend on them.", image: null },
+            { id: 'i3q17', question: "In a balanced ecosystem, the population of a predator and its prey often ___.", options: ["rise and fall in cycles", "remain perfectly constant", "grow infinitely"], correctAnswer: "rise and fall in cycles", explanation: "More prey allows for more predators. More predators lead to less prey. Less prey leads to fewer predators. This creates a natural, cyclical fluctuation in their populations.", image: null },
+            { id: 'i3q18', "question": "Plastic waste is particularly harmful in marine environments because...", options: ["it is a non-living thing", "it does not decompose and can be mistaken for food by animals", "it makes the ocean look untidy"], correctAnswer: "it does not decompose and can be mistaken for food by animals", explanation: "Unlike organic matter, plastic persists for hundreds of years. Animals like turtles and birds eat it, causing internal injury and starvation, and they can also become entangled in it.", image: null },
+            { id: 'i3q19', question: "What is the key difference between a habitat and an ecosystem?", options: ["A habitat is the 'address', while an ecosystem is the 'house and its inhabitants'", "An ecosystem has no non-living parts", "A habitat is always larger than an ecosystem"], correctAnswer: "A habitat is the 'address', while an ecosystem is the 'house and its inhabitants'", explanation: "A habitat is just the physical place where an organism lives. An ecosystem is much broader, including the habitat AND all the interactions between all living and non-living things within it.", image: null },
+            { id: 'i3q20', question: "Protecting 'keystone species' like sea otters is a major conservation goal because...", options: ["they are the cutest animals", "their removal can cause a disproportionately large collapse in the ecosystem", "they are the main food source for humans"], correctAnswer: "their removal can cause a disproportionately large collapse in the ecosystem", explanation: "A keystone species has a huge effect on its environment. For example, sea otters eat sea urchins. Without otters, urchins overgraze kelp forests, destroying the habitat for countless other species.", image: null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-orange-500 hover:bg-orange-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered this topic!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
