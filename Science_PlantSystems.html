@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Plant System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-emerald-200 via-teal-200 to-cyan-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-teal-700">Welcome, Science Explorer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on the Plant System.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-teal-500 focus:border-teal-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6 text-lg">Start Exploring!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-teal-700 mb-2">PSLE Science: Plant System</h1>
+            <p class="text-slate-600 mb-8">Choose a topic to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-teal-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-teal-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-teal-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-teal-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-teal-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleSciencePlantSystemApp_v1'; // Changed storage key for the new topic
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Plant System ---
+    const allFlashcardSets = {
+        "Set 1: Plant Parts & Basic Functions": [
+            { id: 'p1q1', question: "Which of these is a primary function of a plant's roots?", options: ["Making food for the plant", "Absorbing sunlight", "Anchoring the plant in the soil"], correctAnswer: "Anchoring the plant in the soil", explanation: "Roots have two main functions: anchoring the plant firmly and absorbing water and minerals. Photosynthesis (making food) happens in the leaves.", image: null },
+            { id: 'p1q2', question: "Which part of the plant is mainly responsible for making food?", options: ["Roots", "Stem", "Leaves"], correctAnswer: "Leaves", explanation: "Leaves contain chlorophyll and are designed to capture sunlight to perform photosynthesis, the process of making food.", image: null },
+            { id: 'p1q3', question: "The process by which plants make their own food using sunlight is called ___.", options: ["Respiration", "Photosynthesis", "Transportation"], correctAnswer: "Photosynthesis", explanation: "Photosynthesis is the vital process where plants use light energy, water, and carbon dioxide to create their own food (sugar).", image: null },
+            { id: 'p1q4', question: "Which part of the plant holds it upright and contains tubes for transport?", options: ["Leaves", "Stem", "Flower"], correctAnswer: "Stem", explanation: "The stem provides structural support and acts like a highway, containing xylem and phloem tubes to transport water and food.", image: null },
+            { id: 'p1q5', question: "What gas do leaves take in from the air to make food?", options: ["Oxygen", "Nitrogen", "Carbon dioxide"], correctAnswer: "Carbon dioxide", explanation: "Carbon dioxide from the air is a key ingredient, along with water and light, that plants need for photosynthesis.", image: null },
+            { id: 'p1q6', question: "The green pigment in leaves that traps energy from sunlight is called ___.", options: ["Chlorophyll", "Stomata", "Phloem"], correctAnswer: "Chlorophyll", explanation: "Chlorophyll is what gives plants their green color and is essential for capturing the light energy needed to power photosynthesis.", image: null },
+            { id: 'p1q7', question: "What is the primary function of a flower?", options: ["To provide food for insects", "To help the plant reproduce", "To absorb sunlight"], correctAnswer: "To help the plant reproduce", explanation: "The flower contains the reproductive organs of the plant, leading to the formation of seeds and fruits.", image: null },
+            { id: 'p1q8', question: "Plants mainly take in water from the soil through their ___.", options: ["Leaves", "Stem", "Roots"], correctAnswer: "Roots", explanation: "Roots are specialized to absorb water and dissolved mineral salts from the soil, which are then transported to the rest of the plant.", image: null },
+            { id: 'p1q9', question: "The tiny pores, usually on the underside of a leaf, that allow for gas exchange are called ___.", options: ["Veins", "Cells", "Stomata"], correctAnswer: "Stomata", explanation: "Stomata (singular: stoma) are small openings that allow the plant to take in carbon dioxide and release oxygen.", image: null },
+            { id: 'p1q10', question: "Which tubes transport water from the roots up to the rest of the plant?", options: ["Phloem (food-carrying)", "Xylem (water-carrying)", "Veins"], correctAnswer: "Xylem (water-carrying)", explanation: "Xylem tubes form a one-way street, carrying water and minerals from the roots up to the stem and leaves.", image: null },
+            { id: 'p1q11', question: "Which tubes transport food from the leaves to other parts of the plant?", options: ["Phloem (food-carrying)", "Xylem (water-carrying)", "Stomata"], correctAnswer: "Phloem (food-carrying)", explanation: "Phloem tubes form a two-way street, distributing the food (sugar) made in the leaves to all other parts of the plant that need energy.", image: null },
+            { id: 'p1q12', question: "The process of releasing energy from food, which happens in all parts of the plant, is called ___.", options: ["Photosynthesis", "Respiration", "Digestion"], correctAnswer: "Respiration", explanation: "Respiration is the chemical process where plants (and animals) break down food to release energy for growth, repair, and other life processes.", image: null },
+            { id: 'p1q13', question: "What is the main source of energy for photosynthesis?", options: ["Heat from the soil", "Wind", "Light energy"], correctAnswer: "Light energy", explanation: "Plants are producers because they can convert light energy, usually from the sun, into chemical energy in the form of food.", image: null },
+            { id: 'p1q14', question: "What gas is released as a waste product during photosynthesis?", options: ["Carbon dioxide", "Nitrogen", "Oxygen"], correctAnswer: "Oxygen", explanation: "While vital for us, oxygen is a by-product of photosynthesis that plants release into the atmosphere.", image: null },
+            { id: 'p1q15', question: "After a flower is fertilised, which part develops into a fruit?", options: ["Petal", "Ovary", "Stamen"], correctAnswer: "Ovary", explanation: "The ovary of the flower swells and ripens to become the fruit, which protects the developing seeds inside.", image: null },
+            { id: 'p1q16', question: "The transfer of pollen from one part of a flower to another is called ___.", options: ["Fertilisation", "Pollination", "Germination"], correctAnswer: "Pollination", explanation: "Pollination is the first step in plant reproduction, where pollen must be moved to the part of the flower containing the eggs.", image: null },
+            { id: 'p1q17', question: "What is the main purpose of a fruit for the plant?", options: ["To provide a sweet taste", "To aid in seed dispersal", "To make more food"], correctAnswer: "To aid in seed dispersal", explanation: "Fruits protect the seeds and often attract animals to eat them, which helps carry the seeds far away from the parent plant.", image: null },
+            { id: 'p1q18', question: "What gas do plants give out during respiration?", options: ["Oxygen", "Carbon dioxide", "Sugar"], correctAnswer: "Carbon dioxide", explanation: "Just like animals, plants release carbon dioxide as a waste product when they respire to get energy from their food.", image: null },
+            { id: 'p1q19', question: "Which of these is NOT a main part of a typical plant?", options: ["Stem", "Soil", "Leaf"], correctAnswer: "Soil", explanation: "Soil is the non-living medium in which many plants grow, but it is not a part of the plant itself. The main parts are roots, stem, leaves, and flowers.", image: null },
+            { id: 'p1q20', question: "The very fine, hair-like structures on roots that absorb most of the water are called ___.", options: ["Root caps", "Root hairs", "Taproots"], correctAnswer: "Root hairs", explanation: "Root hairs greatly increase the surface area of the roots, allowing the plant to absorb water and minerals more efficiently.", image: null }
+        ],
+        "Set 2: Photosynthesis & Transport": [
+            { id: 'p2q1', question: "Most photosynthesis occurs in the leaf's cells because they are packed with ___.", options: ["Veins", "Stomata", "Chloroplasts"], correctAnswer: "Chloroplasts", explanation: "Chloroplasts are the tiny organelles inside plant cells that contain chlorophyll and are the actual sites of photosynthesis.", image: null },
+            { id: 'p2q2', question: "Which of these correctly shows the word equation for photosynthesis?", options: ["Sugar + Oxygen → Carbon Dioxide + Water", "Carbon Dioxide + Water → Sugar + Oxygen", "Water + Oxygen → Sugar + Carbon Dioxide"], correctAnswer: "Carbon Dioxide + Water → Sugar + Oxygen", explanation: "In the presence of light and chlorophyll, plants convert carbon dioxide and water (the ingredients) into sugar (food) and oxygen (waste product).", image: null },
+            { id: 'p2q3', question: "The bundle of tubes containing both xylem and phloem in a leaf is known as a ___.", options: ["Stoma", "Cuticle", "Vein"], correctAnswer: "Vein", explanation: "The veins you see on a leaf are the transport pipelines, containing the xylem and phloem tubes that connect the leaf to the rest of the plant.", image: null },
+            { id: 'p2q4', question: "Food is transported from the leaves to the roots through the ___.", options: ["Phloem", "Xylem", "Stomata"], correctAnswer: "Phloem", explanation: "Phloem tubes carry food (sugars) from the leaves (the 'source') to all other parts that need energy, like the roots (the 'sink').", image: null },
+            { id: 'p2q5', question: "Transport in the xylem is a one-way flow. In which direction does it move?", options: ["From leaves to roots", "From roots to leaves", "Both up and down"], correctAnswer: "From roots to leaves", explanation: "Xylem transports water and minerals absorbed by the roots upwards to the stem and leaves where they are needed for photosynthesis and other functions.", image: null },
+            { id: 'p2q6', question: "Transport in the phloem is a two-way flow. Why is this necessary?", options: ["To carry water up and down", "To carry food to all parts of the plant", "To get rid of waste products"], correctAnswer: "To carry food to all parts of the plant", explanation: "Food made in the leaves needs to be sent down to the roots for storage and up to growing flowers or fruits, requiring a two-way system.", image: null },
+            { id: 'p2q7', question: "What happens during fertilisation, which occurs after pollination?", options: ["Pollen lands on the stigma", "The male reproductive cell fuses with the ovule (egg)", "The seed begins to grow into a plant"], correctAnswer: "The male reproductive cell fuses with the ovule (egg)", explanation: "Fertilisation is the fusion of the male and female sex cells, which is the event that actually creates the embryo for a new seed.", image: null },
+            { id: 'p2q8', question: "Stomata open and close to control gas exchange. What else do they control?", options: ["Water loss from the leaf", "The amount of sunlight absorbed", "The colour of the leaf"], correctAnswer: "Water loss from the leaf", explanation: "When stomata are open for gas exchange, water vapour also escapes. The plant must balance getting CO₂ with losing too much water (transpiration).", image: null },
+            { id: 'p2q9', question: "When does respiration occur in a plant?", options: ["Only during the day", "Only at night", "All the time (day and night)"], correctAnswer: "All the time (day and night)", explanation: "All living cells need a constant supply of energy to stay alive, so plants must respire continuously, just like we do.", image: null },
+            { id: 'p2q10', question: "In a typical plant, when is the rate of photosynthesis higher than the rate of respiration?", options: ["During a bright day", "During the night", "They are always equal"], correctAnswer: "During a bright day", explanation: "During the day, photosynthesis is actively producing food and oxygen, far more than the plant uses for respiration. At night, only respiration occurs.", image: null },
+            { id: 'p2q11', question: "How does carbon dioxide from the air reach the chloroplasts inside the leaf cells?", options: ["Through the veins", "By passing through the stomata", "By being absorbed with water"], correctAnswer: "By passing through the stomata", explanation: "Carbon dioxide enters the leaf through the stomata and then diffuses through the air spaces inside the leaf to reach the cells where photosynthesis takes place.", image: null },
+            { id: 'p2q12', question: "Fruits like potatoes (tubers) and carrots (taproots) are swollen because they ___.", options: ["Absorb a lot of water", "Contain undeveloped flowers", "Store excess food from photosynthesis"], correctAnswer: "Store excess food from photosynthesis", explanation: "These parts of the plant act as 'sinks', where the plant stores surplus food (starch) made in the leaves to be used later.", image: null },
+            { id: 'p2q13', question: "After fertilisation in a flower, what does the ovule develop into?", options: ["Fruit", "Seed", "Petal"], correctAnswer: "Seed", explanation: "The fertilised ovule contains the plant embryo and develops into the seed. The ovary surrounding the ovule develops into the fruit.", image: null },
+            { id: 'p2q14', question: "How are photosynthesis and respiration related in terms of gases?", options: ["They use and produce the same gases", "They are opposite processes", "They are not related at all"], correctAnswer: "They are opposite processes", explanation: "Photosynthesis takes in carbon dioxide and releases oxygen. Respiration takes in oxygen and releases carbon dioxide.", image: null },
+            { id: 'p2q15', question: "The process of water vapour escaping from a plant's leaves is called ___.", options: ["Respiration", "Condensation", "Transpiration"], correctAnswer: "Transpiration", explanation: "Transpiration is the evaporation of water from the plant, primarily through the stomata in the leaves. It helps pull water up the xylem.", image: null },
+            { id: 'p2q16', question: "What is the specific role of chlorophyll in photosynthesis?", options: ["It is the food that is produced", "It converts light energy into chemical energy", "It absorbs water from the air"], correctAnswer: "It converts light energy into chemical energy", explanation: "Chlorophyll is a molecule that absorbs sunlight and uses its energy to drive the chemical reaction of combining water and carbon dioxide into sugar.", image: null },
+            { id: 'p2q17', question: "If a plant's leaves appear yellow instead of green, it suggests a problem with producing ___.", options: ["Carbon dioxide", "Water", "Chlorophyll"], correctAnswer: "Chlorophyll", explanation: "Chlorophyll is the pigment that gives leaves their green color. A lack of it (often due to nutrient deficiency) causes the leaves to look yellow or pale.", image: null },
+            { id: 'p2q18', question: "Where does a plant get the energy it needs to carry out respiration?", options: ["Directly from sunlight", "From the food (sugar) it made", "From minerals in the soil"], correctAnswer: "From the food (sugar) it made", explanation: "Photosynthesis stores energy in sugar. Respiration is the process of 'unlocking' that stored energy from the sugar molecules.", image: null },
+            { id: 'p2q19', question: "Removing a ring of bark and phloem from a tree trunk causes the area above the ring to swell. Why?", options: ["Water transported by xylem cannot go down", "Food from the leaves cannot travel down", "The tree is trying to heal the wound"], correctAnswer: "Food from the leaves cannot travel down", explanation: "This experiment, called girdling, proves that food travels down the phloem. The sugary sap gets blocked and accumulates above the removed ring.", image: null },
+            { id: 'p2q20', question: "The network of veins in a leaf serves two functions: support and ___.", options: ["Photosynthesis", "Transport", "Reproduction"], correctAnswer: "Transport", explanation: "Veins provide a rigid framework for the leaf, and more importantly, they contain the xylem and phloem for transporting water and food.", image: null }
+        ],
+        "Set 3: Applying System Knowledge": [
+            { id: 'p3q1', question: "A celery stalk in red-coloured water develops red lines up to its leaves. This demonstrates that ___ transport water.", options: ["phloem tubes", "stomata", "xylem tubes"], correctAnswer: "xylem tubes", explanation: "This classic experiment shows the path of water up the plant. The red dye is carried in the water through the xylem, making them visible.", image: null },
+            { id: 'p3q2', question: "If a plant's leaves are coated with a clear, waterproof grease, which process will stop almost immediately?", options: ["Absorption of water by roots", "Transport of food in the stem", "Gas exchange through stomata"], correctAnswer: "Gas exchange through stomata", explanation: "The grease would block the stomata, preventing carbon dioxide from entering and oxygen from leaving. This halts photosynthesis.", image: null },
+            { id: 'p3q3', question: "A plant is in a sealed jar with a chemical that absorbs CO₂. Why will the plant eventually die, even with light and water?", options: ["It cannot respire", "It cannot photosynthesise", "The chemical is poisonous"], correctAnswer: "It cannot photosynthesise", explanation: "Without carbon dioxide, a key ingredient for photosynthesis is missing. The plant cannot make food and will starve.", image: null },
+            { id: 'p3q4', question: "Why might a plant in a waterlogged (overwatered) pot begin to wilt?", options: ["The roots are taking in too much water", "The roots cannot get oxygen to respire", "The leaves get too heavy and droop"], correctAnswer: "The roots cannot get oxygen to respire", explanation: "Root cells need to respire. Waterlogged soil has no air pockets, so the roots suffocate and die, and can no longer absorb water, causing the plant to wilt.", image: null },
+            { id: 'p3q5', question: "An experiment has two identical plants. Plant A is in the light, Plant B is in a dark cupboard. Which statement is true after 24 hours?", options: ["Only Plant A is respiring", "Only Plant B is photosynthesising", "Both are respiring, but only Plant A is photosynthesising"], correctAnswer: "Both are respiring, but only Plant A is photosynthesising", explanation: "Respiration happens constantly in all living cells. Photosynthesis only happens when light is available.", image: null },
+            { id: 'p3q6', question: "How does the transport system show interdependence between the roots and leaves?", options: ["It proves the leaves are more important", "The leaves make food but need water from the roots", "The roots absorb water but don't need food"], correctAnswer: "The leaves make food but need water from the roots", explanation: "The leaves need water (from roots via xylem) and the roots need food (from leaves via phloem). They depend on each other to survive, connected by the transport system.", image: null },
+            { id: 'p3q7', question: "To test if light is needed for photosynthesis, a student should cover part of a leaf with black paper and then test the whole leaf for ___.", options: ["Water", "Starch", "Chlorophyll"], correctAnswer: "Starch", explanation: "Starch is the storage form of sugar (food). The part of the leaf exposed to light will have starch, while the covered part will not, proving light is necessary.", image: null },
+            { id: 'p3q8', question: "A plant has very large, broad leaves. This is most likely an adaptation for a habitat with ___.", options: ["strong winds", "low light levels", "very little water"], correctAnswer: "low light levels", explanation: "Large leaves maximize the surface area to capture as much of the limited available sunlight as possible, such as on a forest floor.", image: null },
+            { id: 'p3q9', question: "A balsam plant is put in a beaker of water with a layer of oil on top. The oil is to ensure that water loss is only through the ___.", options: ["beaker's surface", "plant's roots", "plant's leaves (transpiration)"], correctAnswer: "plant's leaves (transpiration)", explanation: "The oil prevents water from evaporating from the beaker, so any decrease in water level is due to the plant absorbing it and losing it through transpiration.", image: null },
+            { id: 'p3q10', question: "What happens to gas levels in a sealed, lit box with a healthy plant inside?", options: ["Oxygen will increase, Carbon dioxide will decrease", "Oxygen will decrease, Carbon dioxide will increase", "Both gases will stay the same"], correctAnswer: "Oxygen will increase, Carbon dioxide will decrease", explanation: "In the light, the rate of photosynthesis is much higher than respiration. The plant will consume CO₂ and release O₂ faster than it does the reverse.", image: null },
+            { id: 'p3q11', question: "If the phloem in a plant's stem is blocked, which part will likely die first from starvation?", options: ["The leaves, as they can't get water", "The roots, as they can't get food", "The flower, as it can't be pollinated"], correctAnswer: "The roots, as they can't get food", explanation: "The roots are non-photosynthetic and rely completely on the phloem to deliver food from the leaves. Without it, they will starve and die.", image: null },
+            { id: 'p3q12', question: "Why does a watered plant stand firm (turgid) while a dry plant droops?", options: ["Water in the stem pushes the plant up", "Water fills the plant cells, making them stiff", "The soil gets harder and supports the plant"], correctAnswer: "Water fills the plant cells, making them stiff", explanation: "Plant cells have a cell wall. When filled with water, the pressure inside (turgor pressure) pushes against the wall, making the tissues rigid and firm.", image: null },
+            { id: 'p3q13', question: "Water lilies have stomata on the upper surface of their leaves. Why is this an advantage?", options: ["To get more sunlight", "To allow gas exchange with the air", "To hide from fish"], correctAnswer: "To allow gas exchange with the air", explanation: "Since the lower surface is in contact with water, having stomata there would be useless for gas exchange with the air. They must be on top.", image: null },
+            { id: 'p3q14', question: "A potted plant is turned on its side. After a few days, the stem bends and grows upwards. This is a response to ___.", options: ["light", "gravity", "touch"], correctAnswer: "gravity", explanation: "This response is called gravitropism. Stems grow away from the pull of gravity to ensure the leaves can reach sunlight for photosynthesis.", image: null },
+            { id: 'p3q15', question: "During a long drought, how is the transport of sugar in the phloem affected?", options: ["It increases to feed the starving roots", "It is not affected at all", "It decreases because photosynthesis slows down"], correctAnswer: "It decreases because photosynthesis slows down", explanation: "A lack of water causes stomata to close to prevent water loss, which also stops CO₂ from entering. This slows or stops photosynthesis, so less sugar is produced to be transported.", image: null },
+            { id: 'p3q16', question: "The main purpose of respiration is to ___.", options: ["release energy from food for life processes", "create water for the plant to use", "produce oxygen for the atmosphere"], correctAnswer: "release energy from food for life processes", explanation: "Respiration is the process that 'burns' the sugar made during photosynthesis to release usable energy for growth, repair, and transport.", image: null },
+            { id: 'p3q17', question: "To best test if chlorophyll is needed for photosynthesis, a scientist should use ___.", options: ["two different plants, one green and one yellow", "a variegated leaf (part green, part white)", "a leaf that is fully covered in black paper"], correctAnswer: "a variegated leaf (part green, part white)", explanation: "A variegated leaf provides a perfect control. On the same leaf, the green part (with chlorophyll) will test positive for starch, while the white part (no chlorophyll) will test negative.", image: null },
+            { id: 'p3q18', question: "Why is it inaccurate to say 'plants breathe in CO₂ and breathe out O₂'?", options: ["Plants respire too, taking in O₂ and releasing CO₂", "Breathing involves lungs, which plants lack", "Both of the above are correct"], correctAnswer: "Both of the above are correct", explanation: "This statement oversimplifies the two separate processes. It ignores respiration and incorrectly uses the term 'breathing', which is a mechanical process involving lungs.", image: null },
+            { id: 'p3q19', question: "A cactus has a thick, fleshy stem and its leaves are reduced to spines. This helps it to ___.", options: ["get more sunlight and look scary", "store water and reduce water loss", "absorb more carbon dioxide"], correctAnswer: "store water and reduce water loss", explanation: "The thick stem stores water. Spines have a very small surface area compared to leaves, which drastically reduces water loss through transpiration in a hot, dry desert.", image: null },
+            { id: 'p3q20', question: "The roots of mangrove trees often grow upwards out of the mud. This adaptation helps the roots to ___.", options: ["get sunlight for photosynthesis", "absorb oxygen directly from the air", "anchor the tree in the strong winds"], correctAnswer: "absorb oxygen directly from the air", explanation: "Mangrove mud is waterlogged and has very little oxygen. These special roots, called pneumatophores, grow into the air to allow the root system to respire.", image: null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-teal-500 hover:bg-teal-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered this topic!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
