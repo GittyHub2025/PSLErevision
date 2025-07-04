@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Diversity of Living Things</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-emerald-200 via-teal-200 to-cyan-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-teal-700">Welcome, Science Explorer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on the Diversity of Living Things.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-teal-500 focus:border-teal-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6 text-lg">Start Exploring!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-teal-700 mb-2">PSLE Science: Diversity</h1>
+            <p class="text-slate-600 mb-8">Choose a topic to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-teal-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-teal-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-teal-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-teal-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-teal-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleScienceDiversityApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Diversity of Living Things ---
+    const allFlashcardSets = {
+        "Set 1: Basic Characteristics & Groups": [
+            { id: 'd1q1', question: "Living things need air, food, and ___.", options: ["Toys", "Water", "Sleep"], correctAnswer: "Water", explanation: "All living things require water for their bodily functions and to survive.", image: null },
+            { id: 'd1q2', question: "Which of the following is a non-living thing?", options: ["Fern", "Mushroom", "Rock"], correctAnswer: "Rock", explanation: "A rock does not show the characteristics of life, such as growth, reproduction, or response to stimuli.", image: null },
+            { id: 'd1q3', question: "Which life process means 'reacting to changes in the surroundings'?", options: ["Growth", "Sensitivity", "Excretion"], correctAnswer: "Sensitivity", explanation: "Sensitivity (or responsiveness) is how living things detect and react to stimuli like light, touch, or heat.", image: null },
+            { id: 'd1q4', question: "The process of getting rid of waste products from the body is called ___.", options: ["Reproduction", "Nutrition", "Excretion"], correctAnswer: "Excretion", explanation: "Excretion removes harmful waste materials produced by the body's activities, which is essential for all living things.", image: null },
+            { id: 'd1q5', question: "What do plants need to make their own food?", options: ["Oxygen", "Sunlight", "Soil"], correctAnswer: "Sunlight", explanation: "Plants use energy from sunlight to perform photosynthesis, converting water and carbon dioxide into food.", image: null },
+            { id: 'd1q6', question: "Which of these is a type of fungus?", options: ["Moss", "Mould", "Algae"], correctAnswer: "Mould", explanation: "Mould, mushrooms, and yeast are all examples of fungi. They cannot make their own food like plants.", image: null },
+            { id: 'd1q7', question: "Bacteria are classified as ___.", options: ["Plants", "Animals", "Microorganisms"], correctAnswer: "Microorganisms", explanation: "Microorganisms are living things that are too small to be seen with the naked eye and require a microscope.", image: null },
+            { id: 'd1q8', question: "A car moves, but it is not a living thing because it cannot ___ on its own.", options: ["Move", "Use energy", "Reproduce"], correctAnswer: "Reproduce", explanation: "While a car moves using fuel, it cannot grow, reproduce, or excrete waste, which are key characteristics of life.", image: null },
+            { id: 'd1q9', question: "Which group of living things is known for making its own food?", options: ["Animals", "Fungi", "Plants"], correctAnswer: "Plants", explanation: "Only plants can carry out photosynthesis to produce their own food. Animals and fungi must get food from other sources.", image: null },
+            { id: 'd1q10', question: "Which of these is a characteristic of ALL living things?", options: ["They can move from place to place", "They grow", "They have a heart"], correctAnswer: "They grow", explanation: "Growth (an increase in size or complexity) is a fundamental characteristic of all living organisms, including plants that don't move.", image: null },
+            { id: 'd1q11', question: "A bird building a nest is a behaviour primarily related to which life process?", options: ["Growth", "Reproduction", "Excretion"], correctAnswer: "Reproduction", explanation: "Building a nest is a preparatory step for laying eggs and raising young, which is part of ensuring the species continues.", image: null },
+            { id: 'd1q12', question: "Why does a mimosa plant fold its leaves when touched?", options: ["It is tired", "It is showing sensitivity", "It is trying to get water"], correctAnswer: "It is showing sensitivity", explanation: "This is a classic example of sensitivity, as the plant is responding to the external stimulus of touch.", image:null },
+            { id: 'd1q13', question: "Which of these is a non-living thing that was once part of a living thing?", options: ["A plastic bottle", "A cotton T-shirt", "A glass cup"], correctAnswer: "A cotton T-shirt", explanation: "Cotton comes from the cotton plant, which was a living thing. The T-shirt itself is now non-living.", image: null },
+            { id: 'd1q14', question: "How do fungi obtain their food?", options: ["By making it using sunlight", "By absorbing it from decaying matter", "By hunting other organisms"], correctAnswer: "By absorbing it from decaying matter", explanation: "Fungi are decomposers. They release chemicals to break down dead material around them and then absorb the nutrients.", image: null },
+            { id: 'd1q15', question: "Which of these is considered a living thing?", options: ["A seed", "A flame", "A river"], correctAnswer: "A seed", explanation: "A seed is alive but in a dormant (sleeping) state. It can grow into a plant under the right conditions.", image: null },
+            { id: 'd1q16', question: "The process of breathing to release energy from food is called ___.", options: ["Respiration", "Nutrition", "Movement"], correctAnswer: "Respiration", explanation: "Respiration is the chemical process where living things release energy from their food. It is not the same as breathing.", image: null },
+            { id: 'd1q17', question: "How do animals get the energy they need to live?", options: ["By sleeping", "By eating other organisms", "By soaking up sunlight"], correctAnswer: "By eating other organisms", explanation: "Animals are consumers. They must eat plants or other animals to obtain energy and nutrients.", image: null },
+            { id: 'd1q18', question: "Which statement is TRUE?", options: ["All animals have legs", "All living things are made of cells", "All plants have flowers"], correctAnswer: "All living things are made of cells", explanation: "The cell is the basic building block of all known living organisms.", image: null },
+            { id: 'd1q19', question: "What do we call things like water, air, and rocks that have never been alive?", options: ["Dead things", "Non-living things", "Pre-living things"], correctAnswer: "Non-living things", explanation: "This category includes all things that do not have and have never had the characteristics of life.", image: null },
+            { id: 'd1q20', question: "A person shivers when it is cold. This is an example of the body showing ___.", options: ["Growth", "Sensitivity", "Reproduction"], correctAnswer: "Sensitivity", explanation: "Shivering is the body's response to the stimulus of cold. The muscle contractions generate heat to warm the body up.", image: null }
+        ],
+        "Set 2: Classifying Animals & Plants": [
+            { id: 'd2q1', question: "Animals with a backbone are called ___.", options: ["Invertebrates", "Insects", "Vertebrates"], correctAnswer: "Vertebrates", explanation: "The backbone, or spinal column, is the key feature of all vertebrates, which includes mammals, birds, fish, reptiles, and amphibians.", image: null },
+            { id: 'd2q2', question: "Which group of vertebrates is known for having feathers?", options: ["Reptiles", "Birds", "Mammals"], correctAnswer: "Birds", explanation: "Feathers are unique to birds and are essential for flight, warmth, and communication.", image: null },
+            { id: 'd2q3', question: "Which of these animals is an insect?", options: ["Spider", "Scorpion", "Butterfly"], correctAnswer: "Butterfly", explanation: "A butterfly is an insect because it has three body parts (head, thorax, abdomen), six legs, and a pair of antennae. Spiders have eight legs.", image: null },
+            { id: 'd2q4', question: "How do fish breathe underwater?", options: ["Through their skin", "Using gills", "Holding their breath"], correctAnswer: "Using gills", explanation: "Gills are specialized organs that allow fish to extract dissolved oxygen directly from the water.", image: null },
+            { id: 'd2q5', question: "Which animal is correctly classified as a mammal?", options: ["Shark", "Penguin", "Bat"], correctAnswer: "Bat", explanation: "A bat is a mammal because it has fur, gives birth to live young, and produces milk. Sharks are fish, and penguins are birds.", image: null },
+            { id: 'd2q6', question: "Plants that use flowers to reproduce are called ___.", options: ["Flowering plants", "Fungi", "Non-flowering plants"], correctAnswer: "Flowering plants", explanation: "Flowering plants, like hibiscus or mango trees, use flowers for reproduction, which later develop into fruits with seeds.", image: null },
+            { id: 'd2q7', question: "Which of these is a non-flowering plant?", options: ["Hibiscus", "Rose", "Fern"], correctAnswer: "Fern", explanation: "Ferns do not produce flowers or seeds. They reproduce using spores, often found as tiny dots on the underside of their leaves.", image: null },
+            { id: 'd2q8', question: "What characteristic is common to both reptiles and amphibians?", options: ["They have scales", "They are cold-blooded", "They live only on land"], correctAnswer: "They are cold-blooded", explanation: "Both reptiles and amphibians are 'cold-blooded' (ectothermic), meaning their body temperature depends on their surroundings.", image: null },
+            { id: 'd2q9', question: "An animal has dry, scaly skin and lays eggs with leathery shells. It is a ___.", options: ["Bird", "Amphibian", "Reptile"], correctAnswer: "Reptile", explanation: "Dry, scaly skin is a key feature of reptiles (like snakes and lizards) that helps prevent water loss.", image: null },
+            { id: 'd2q10', question: "Animals that do NOT have a backbone are called ___.", options: ["Vertebrates", "Invertebrates", "Mammals"], correctAnswer: "Invertebrates", explanation: "Most animals on Earth are invertebrates. This group includes insects, snails, worms, and jellyfish.", image: null },
+            { id: 'd2q11', question: "What is the typical outer covering of a mammal?", options: ["Feathers", "Scales", "Hair or fur"], correctAnswer: "Hair or fur", explanation: "Hair or fur is a defining characteristic of mammals, providing insulation and protection.", image: null },
+            { id: 'd2q12', question: "A frog has moist skin and lays its eggs in water. It is classified as a(n) ___.", options: ["Amphibian", "Reptile", "Fish"], correctAnswer: "Amphibian", explanation: "Amphibians, like frogs and salamanders, typically have moist skin and a life cycle that starts in water (as tadpoles).", image: null },
+            { id: 'd2q13', question: "Which of these animals is NOT a vertebrate?", options: ["Snake", "Fish", "Jellyfish"], correctAnswer: "Jellyfish", explanation: "A jellyfish is an invertebrate. It has a soft body with no internal skeleton or backbone.", image: null },
+            { id: 'd2q14', question: "A mango tree is a flowering plant. What does its flower develop into after pollination?", options: ["A leaf", "A fruit", "A root"], correctAnswer: "A fruit", explanation: "In flowering plants, the ovary of the flower develops into a fruit, which protects the seeds inside.", image: null },
+            { id: 'd2q15', question: "What is a key difference between a bird and a reptile?", options: ["Birds have feathers, reptiles have scales", "Birds lay eggs, reptiles give birth", "Birds are vertebrates, reptiles are not"], correctAnswer: "Birds have feathers, reptiles have scales", explanation: "Body covering is a primary way to tell these groups apart. Birds are the only animals with feathers.", image: null },
+            { id: 'd2q16', question: "What do all insects have in common?", options: ["They can all fly", "They have six legs", "They live in colonies"], correctAnswer: "They have six legs", explanation: "Having six jointed legs is the defining characteristic of an insect. Spiders have eight legs and are not insects.", image: null },
+            { id: 'd2q17', question: "How is a mushroom different from a plant?", options: ["It has a stem", "It cannot move", "It cannot make its own food"], correctAnswer: "It cannot make its own food", explanation: "Fungi (like mushrooms) are absorbers of food (heterotrophs), while plants are producers of food (autotrophs) through photosynthesis.", image: null },
+            { id: 'd2q18', question: "A guppy gives birth to live young and has a backbone. Is it a mammal?", options: ["Yes, because it gives live birth", "No, because it is a fish", "Yes, because it lives in water"], correctAnswer: "No, because it is a fish", explanation: "While some fish give live birth, the guppy breathes with gills and has scales, classifying it as a fish, not a mammal.", image: null },
+            { id: 'd2q19', question: "Moss is a simple plant often found on wet rocks. It is a ___.", options: ["Flowering plant", "Fungus", "Non-flowering plant"], correctAnswer: "Non-flowering plant", explanation: "Like ferns, mosses are non-flowering plants that reproduce with spores, not seeds.", image: null },
+            { id: 'd2q20', question: "Which group of animals gives birth to live young and feeds them with milk?", options: ["Birds", "Mammals", "Amphibians"], correctAnswer: "Mammals", explanation: "Producing milk to feed their young is a unique and defining characteristic of all mammals.", image: null }
+        ],
+        "Set 3: Applying Classification": [
+            { id: 'd3q1', question: "A whale lives in the sea and looks like a fish, but it is a mammal. Which characteristic proves this?", options: ["It is very large", "It breathes air with lungs", "It has fins"], correctAnswer: "It breathes air with lungs", explanation: "Breathing air with lungs (and therefore needing to surface) is a key mammal trait, unlike fish which use gills to breathe in water.", image: null },
+            { id: 'd3q2', question: "A chart asks: 'Does it have feathers?' If yes, it's a bird. If no, it asks another question. This is part of a ___.", options: ["Food web", "Dichotomous key", "Life cycle diagram"], correctAnswer: "Dichotomous key", explanation: "A dichotomous key is a tool used for identification that consists of a series of choices between two alternative characteristics.", image: null },
+            { id: 'd3q3', question: "An animal has a hard exoskeleton, 3 body parts, and 6 jointed legs. It must be a(n) ___.", options: ["Arachnid", "Crustacean", "Insect"], correctAnswer: "Insect", explanation: "These three features – exoskeleton, 3 body parts (head, thorax, abdomen), and 6 legs – are the defining characteristics of an insect.", image: null },
+            { id: 'd3q4', question: "Both a penguin and a chicken are birds, but they cannot fly. What characteristic still places them in the bird group?", options: ["They both have beaks", "They are both warm-blooded", "They both have feathers"], correctAnswer: "They both have feathers", explanation: "All birds, whether they can fly or not, have feathers. This unique feature is a primary reason for their classification.", image: null },
+            { id: 'd3q5', question: "A platypus lays eggs like a reptile, but it is classified as a mammal. Why?", options: ["It lives near water", "It feeds its young with milk", "It has a bill like a duck"], correctAnswer: "It feeds its young with milk", explanation: "The platypus is a rare egg-laying mammal. It is classified as a mammal because it has fur and produces milk for its young.", image: null },
+            { id: 'd3q6', question: "Why are ferns and mosses classified in a different group from pine trees?", options: ["Ferns and mosses are smaller", "Ferns and mosses reproduce by spores", "Pine trees are green"], correctAnswer: "Ferns and mosses reproduce by spores", explanation: "Reproductive method is a key classifier. Pine trees are non-flowering but produce seeds in cones, while ferns and mosses use spores.", image: null },
+            { id: 'd3q7', question: "A snail has a shell, but it is not a reptile like a turtle because the snail ___.", options: ["moves too slowly", "lives on land", "does not have a backbone"], correctAnswer: "does not have a backbone", explanation: "A turtle is a vertebrate (an animal with a backbone). A snail is an invertebrate. This is a fundamental difference.", image: null },
+            { id: 'd3q8', question: "A student groups a snake and an earthworm together because they are long and have no legs. Why is this incorrect?", options: ["One lives on land, one in soil", "A snake is a vertebrate, an earthworm is not", "A snake is dangerous, an earthworm is not"], correctAnswer: "A snake is a vertebrate, an earthworm is not", explanation: "Classification should be based on fundamental structures, not just appearance. A snake has a backbone (it's a reptile), while an earthworm does not.", image: null },
+        { id: 'd3q9', question: "Why is a mushroom not classified as a plant?", options: ["It grows in the dark", "It does not have chlorophyll", "It is soft"], correctAnswer: "It does not have chlorophyll", explanation: "Plants are defined by their ability to make their own food using chlorophyll (photosynthesis). Fungi lack chlorophyll and absorb nutrients from others.", image: null },
+        { id: 'd3q10', question: "You find an animal with moist skin and no scales. It is most likely a(n) ___.", options: ["Fish", "Reptile", "Amphibian"], correctAnswer: "Amphibian", explanation: "Skin type is a key differentiator. Amphibians (like frogs) have moist, permeable skin, while reptiles have dry, scaly skin and fish have scales.", image: null },
+        { id: 'd3q11', question: "Which question would be LEAST helpful for telling a fish and a dolphin apart?", options: ["Does it have gills?", "Does it have hair?", "Does it swim in water?"], correctAnswer: "Does it swim in water?", explanation: "This is a poor question for a key because the answer is 'yes' for both. Good keys use questions that separate the organisms.", image: null },
+        { id: 'd3q12', question: "A seahorse is a type of fish, even though it swims upright. What feature confirms it is a fish?", options: ["It lives in the sea", "It eats small shrimps", "It has gills and fins"], correctAnswer: "It has gills and fins", explanation: "Despite its odd shape, a seahorse has the essential fish features: a backbone, gills for breathing, and fins for movement.", image: null },
+        { id: 'd3q13', question: "What is the primary advantage of a classification system in science?", options: ["It gives every animal a name", "It helps organize living things into meaningful groups", "It proves which animal is the strongest"], correctAnswer: "It helps organize living things into meaningful groups", explanation: "Classification (taxonomy) creates order from diversity, making organisms easier to study and showing how they are related.", image: null },
+        { id: 'd3q14', question: "An animal is warm-blooded. This evidence suggests it can only be a ___ or a ___.", options: ["Reptile or Fish", "Bird or Mammal", "Amphibian or Bird"], correctAnswer: "Bird or Mammal", explanation: "Birds and mammals are endothermic ('warm-blooded'), meaning they generate their own body heat. All other vertebrate groups are 'cold-blooded'.", image: null },
+        { id: 'd3q15', question: "To distinguish a spider from an insect, the most reliable feature to count is the number of ___.", options: ["Eyes", "Legs", "Wings"], correctAnswer: "Legs", explanation: "All insects have six legs. Spiders are arachnids and are defined by having eight legs.", image: null },
+        { id: 'd3q16', question: "A coconut is a large, hard seed. It floats in water. This feature helps the coconut palm with ___.", options: ["Making food", "Getting sunlight", "Seed dispersal"], correctAnswer: "Seed dispersal", explanation: "The ability to float allows the seed to travel far on ocean currents to new locations, reducing competition with the parent plant.", image: null },
+        { id: 'd3q17', question: "The main difference between how bacteria and fungi get food is that...", options: ["Bacteria are single-celled", "Fungi are decomposers", "Their method of getting nutrients differ"], correctAnswer: "Their method of getting nutrients differ", explanation: "While both are decomposers, Fungi release enzymes externally to digest food before absorbing it. Bacteria can have various methods, including some making their own food (photosynthesis). The main difference is the specific way they get food. ", image: null },
+        { id: 'd3q18', question: "What is a major difference between a pine tree and a hibiscus plant?", options: ["A pine tree is bigger", "A hibiscus has flowers, a pine tree has cones", "A hibiscus is green, a pine tree is brown"], correctAnswer: "A hibiscus has flowers, a pine tree has cones", explanation: "This is a key classification difference. A hibiscus is a flowering plant. A pine tree is a non-flowering plant (a gymnosperm) that uses cones to produce seeds.", image: null },
+        { id: 'd3q19', question: "Both sharks and dolphins have a streamlined body shape. This is because...", options: ["They belong to the same group", "It is an adaptation for moving efficiently in water", "They eat the same food"], correctAnswer: "It is an adaptation for moving efficiently in water", explanation: "This is an example of convergent evolution. Although one is a fish and one is a mammal, they developed similar body shapes because it is the most effective for life in the ocean.", image: null },
+        { id: 'd3q20', question: "A scientist discovers a new organism. It is multi-cellular, cannot move, has no chlorophyll, and absorbs nutrients from dead leaves. How should it be classified?", options: ["Plant", "Animal", "Fungus"], correctAnswer: "Fungus", explanation: "The key features described – multi-cellular, stationary, no chlorophyll (can't make its own food), and absorbing nutrients – perfectly match the definition of a fungus.", image: null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-teal-500 hover:bg-teal-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered this topic!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
