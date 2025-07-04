@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Math: Fractions, Decimals & Percentage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-blue-200 via-indigo-200 to-purple-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-indigo-700">Welcome, Math Whiz!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your PSLE Math revision.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-indigo-500 focus:border-indigo-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-indigo-500 hover:bg-indigo-600 text-white w-full py-3 px-6 text-lg">Start Solving!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-indigo-700 mb-2">PSLE Math Mastery</h1>
+            <p class="text-slate-600 mb-8">Choose a challenge level!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <!-- ADDED: Title for the flashcard screen -->
+            <h2 id="flashcardSetTitle" class="text-xl md:text-2xl font-bold text-indigo-700 mb-4 text-center"></h2>
+
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-indigo-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-indigo-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-indigo-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-indigo-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-indigo-500 hover:bg-indigo-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleMathApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Math ---
+    // UPDATED: Set names to be more descriptive
+    const allFlashcardSets = {
+        "Set 1: Advanced (Fractions, Decimals, %)": [
+            { id: 'm1q1', question: "What is 3 1/4 + 2 5/8?", options: ["5 3/8", "5 7/8", "6 1/8"], correctAnswer: "5 7/8", explanation: "First, convert to a common denominator (8). 3 1/4 = 3 2/8. Then, add the whole numbers and fractions: 3+2=5 and 2/8+5/8=7/8. The answer is 5 7/8." },
+            { id: 'm1q2', question: "Calculate 4/5 of 120.", options: ["96", "100", "80"], correctAnswer: "96", explanation: "To find the fraction of a number, divide the number by the denominator and multiply by the numerator. (120 ÷ 5) × 4 = 24 × 4 = 96." },
+            { id: 'm1q3', question: "Express 7/20 as a percentage.", options: ["28%", "35%", "70%"], correctAnswer: "35%", explanation: "To convert a fraction to a percentage, multiply by 100%. (7/20) × 100% = 35%." },
+            { id: 'm1q4', question: "A baker used 1/3 of a bag of flour on Monday and 2/5 on Tuesday. What fraction of the flour was left?", options: ["4/15", "8/15", "2/15"], correctAnswer: "4/15", explanation: "Total used: 1/3 + 2/5 = 5/15 + 6/15 = 11/15. The whole bag is 1 (or 15/15). Left: 15/15 - 11/15 = 4/15." },
+            { id: 'm1q5', question: "Find the value of 5 ÷ 3/4.", options: ["3 3/4", "6 2/3", "5 1/4"], correctAnswer: "6 2/3", explanation: "To divide by a fraction, multiply by its reciprocal. 5 ÷ 3/4 = 5 × 4/3 = 20/3. Convert to a mixed number: 20 ÷ 3 = 6 with a remainder of 2, so 6 2/3." },
+            { id: 'm1q6', question: "Which fraction is the largest: 2/3, 5/6, 7/9?", options: ["2/3", "5/6", "7/9"], correctAnswer: "5/6", explanation: "Find a common denominator (18). 2/3 = 12/18. 5/6 = 15/18. 7/9 = 14/18. The largest numerator is 15, so 5/6 is the largest." },
+            { id: 'm1q7', question: "Calculate 12.5 - 3.87.", options: ["8.63", "9.37", "8.73"], correctAnswer: "8.63", explanation: "Align the decimal points. 12.50 - 3.87. Borrow from the tenths and ones place to subtract. The result is 8.63." },
+            { id: 'm1q8', question: "What is 0.45 x 300?", options: ["13.5", "135", "1350"], correctAnswer: "135", explanation: "Multiply 45 by 3 to get 135. Since 0.45 has two decimal places and 300 can be thought of as 3x100, the two decimal places are cancelled by the 100. So, 0.45 x 300 = 135." },
+            { id: 'm1q9', question: "A rope is 8.4m long. It is cut into 4 equal pieces. What is the length of each piece?", options: ["2.1m", "2.01m", "21m"], correctAnswer: "2.1m", explanation: "Divide the total length by the number of pieces: 8.4 ÷ 4 = 2.1. Each piece is 2.1m long." },
+            { id: 'm1q10', question: "Round off 19.852 to 1 decimal place.", options: ["19.8", "19.9", "20.0"], correctAnswer: "19.9", explanation: "Look at the digit in the second decimal place (5). If it is 5 or greater, round up the first decimal place. So, 8 becomes 9. The answer is 19.9." },
+            { id: 'm1q11', question: "Express 1.05 as a mixed number in its simplest form.", options: ["1 5/10", "1 1/2", "1 1/20"], correctAnswer: "1 1/20", explanation: "1.05 means 1 and 5 hundredths (5/100). Simplify the fraction 5/100 by dividing both numerator and denominator by 5, which gives 1/20. So, it is 1 1/20." },
+            { id: 'm1q12', question: "Find the sum of 0.6, 2.34 and 5.", options: ["7.94", "7.40", "8.0"], correctAnswer: "7.94", explanation: "Align the decimal points: 0.60 + 2.34 + 5.00. Adding them up column by column gives 7.94." },
+            { id: 'm1q13', question: "Find 60% of 250kg.", options: ["150kg", "125kg", "180kg"], correctAnswer: "150kg", explanation: "60% is 60/100 or 0.6. Calculate 0.6 × 250 = 150. So, 60% of 250kg is 150kg." },
+            { id: 'm1q14', question: "Express 48 out of 200 as a percentage.", options: ["24%", "48%", "96%"], correctAnswer: "24%", explanation: "Form a fraction (48/200) and multiply by 100%. (48/200) × 100% = 24%." },
+            { id: 'm1q15', question: "A price of $80 is increased by 15%. What is the new price?", options: ["$92", "$81.20", "$95"], correctAnswer: "$92", explanation: "First find the increase: 15% of $80 = 0.15 × 80 = $12. Then add it to the original price: $80 + $12 = $92." },
+            { id: 'm1q16', question: "A bag costs $120. There is a 20% discount. How much is the discount?", options: ["$20", "$24", "$96"], correctAnswer: "$24", explanation: "The discount is 20% of the original price. 20% of $120 = 0.20 × 120 = $24." },
+            { id: 'm1q17', question: "There are 40 pupils in a class. 25% of them wear glasses. How many pupils do not wear glasses?", options: ["10", "30", "25"], correctAnswer: "30", explanation: "Pupils with glasses: 25% of 40 = 0.25 × 40 = 10. Pupils without glasses: 40 - 10 = 30." },
+            { id: 'm1q18', question: "What is 3/4 of $20?", options: ["$12", "$15", "$16"], correctAnswer: "$15", explanation: "Divide $20 by the denominator (4) and multiply by the numerator (3). ($20 ÷ 4) × 3 = $5 × 3 = $15." },
+            { id: 'm1q19', question: "Arrange in ascending order: 0.7, 7%, 7/9.", options: ["7%, 0.7, 7/9", "0.7, 7%, 7/9", "7%, 7/9, 0.7"], correctAnswer: "7%, 0.7, 7/9", explanation: "Convert all to decimals: 7% = 0.07; 0.7 is 0.7; 7/9 ≈ 0.777... Ascending (smallest to largest) order is 0.07, 0.7, 0.777... which is 7%, 0.7, 7/9." },
+            { id: 'm1q20', question: "A tank is 3/5 full. After adding 20 litres, it becomes 4/5 full. What is the capacity of the tank?", options: ["80L", "100L", "120L"], correctAnswer: "100L", explanation: "The increase in water (20 litres) corresponds to the increase in the fraction: 4/5 - 3/5 = 1/5. So, 1/5 of the tank is 20L. The full capacity (5/5) is 5 × 20L = 100L." }
+        ],
+        "Set 2: Deeper Understanding (Mixed Topics)": [
+            { id: 'm2q1', question: "John spent 1/4 of his salary on rent and 2/5 of the *remainder* on food. What fraction of his salary was left?", options: ["7/20", "9/20", "3/10"], correctAnswer: "9/20", explanation: "Remainder after rent: 1 - 1/4 = 3/4. Spent on food: 2/5 × 3/4 = 6/20 = 3/10. Total spent: 1/4 + 3/10 = 5/20 + 6/20 = 11/20. Left: 1 - 11/20 = 9/20." },
+            { id: 'm2q2', question: "3/7 of the beads in a box are red. There are 24 more blue beads than red beads. How many beads are there in total?", options: ["168", "56", "84"], correctAnswer: "168", explanation: "Fraction of blue beads = 1 - 3/7 = 4/7. Difference = 4/7 - 3/7 = 1/7. This difference is 24 beads. So, 1/7 = 24. Total (7/7) = 7 × 24 = 168 beads." },
+            { id: 'm2q3', question: "A rectangular field is 3/4 km long and 2/3 km wide. Find its area in km².", options: ["5/7 km²", "1/2 km²", "5/12 km²"], correctAnswer: "1/2 km²", explanation: "Area = Length × Width. Area = 3/4 × 2/3 = 6/12. Simplify the fraction by dividing the numerator and denominator by 6. Area = 1/2 km²." },
+            { id: 'm2q4', question: "2/3 of pupils in a hall are boys. After 15 boys leave, the number of boys is equal to the number of girls. How many girls are there?", options: ["15", "30", "45"], correctAnswer: "15", explanation: "Initially, the ratio of Boys to Girls is 2:1. The difference is 1 unit. When 15 boys leave, the ratio becomes 1:1. The change of 15 boys made the difference (1 unit) disappear. So, 1 unit = 15. The number of girls is 1 unit, which is 15." },
+            { id: 'm2q5', question: "A jug contains 1 1/2 litres of water. A glass can hold 1/8 litre. How many glasses can be *completely* filled from the jug?", options: ["12", "13", "11"], correctAnswer: "12", explanation: "Total water = 1.5 litres. Glass capacity = 1/8 litre = 0.125 litres. Number of glasses = 1.5 ÷ 0.125 = 12. Or, 3/2 ÷ 1/8 = 3/2 × 8/1 = 24/2 = 12." },
+            { id: 'm2q6', question: "Samy, Tom and Raju shared a pizza. Samy ate 1/6. Tom ate 1/4 *more* than Samy. What fraction of the pizza did Raju eat?", options: ["5/12", "7/12", "1/3"], correctAnswer: "5/12", explanation: "Tom ate: 1/6 + 1/4 = 2/12 + 3/12 = 5/12. Samy and Tom ate: 1/6 + 5/12 = 2/12 + 5/12 = 7/12. Raju ate the rest: 1 - 7/12 = 5/12." },
+            { id: 'm2q7', question: "The total mass of 3 identical books and 2 identical files is 5.4 kg. The mass of one file is 0.45 kg. Find the mass of one book.", options: ["1.5 kg", "1.65 kg", "4.5 kg"], correctAnswer: "1.5 kg", explanation: "Mass of 2 files = 2 × 0.45 kg = 0.9 kg. Mass of 3 books = 5.4 kg - 0.9 kg = 4.5 kg. Mass of 1 book = 4.5 kg ÷ 3 = 1.5 kg." },
+            { id: 'm2q8', question: "A container had 5 litres of juice. After pouring an equal amount into 8 cups, 1.4 litres of juice was left. How much juice was in each cup, in ml?", options: ["360 ml", "450 ml", "625 ml"], correctAnswer: "450 ml", explanation: "Juice poured = 5 L - 1.4 L = 3.6 L. Juice per cup = 3.6 L ÷ 8 = 0.45 L. Convert to ml: 0.45 L × 1000 = 450 ml." },
+            { id: 'm2q9', question: "The cost of 1 kg of grapes is $6.50. Siti bought 2.4 kg. How much change did she receive from a $20 note?", options: ["$15.60", "$4.40", "$5.40"], correctAnswer: "$4.40", explanation: "Cost of grapes = 2.4 kg × $6.50/kg = $15.60. Change = $20 - $15.60 = $4.40." },
+            { id: 'm2q10', question: "A plank of wood 10m long is cut into shorter pieces, each 0.8m long. What is the maximum number of pieces that can be cut?", options: ["12", "13", "12.5"], correctAnswer: "12", explanation: "Number of pieces = 10m ÷ 0.8m = 12.5. Since you cannot have half a piece, the maximum number of *complete* pieces is 12." },
+            { id: 'm2q11', question: "Peter is 1.52m tall. He is 0.08m taller than Ali. David is 0.15m shorter than Peter. What is their average height, rounded to 2 d.p.?", options: ["1.44m", "1.45m", "1.46m"], correctAnswer: "1.44m", explanation: "Peter=1.52m. Ali = 1.52 - 0.08 = 1.44m. David = 1.52 - 0.15 = 1.37m. Total height = 1.52+1.44+1.37 = 4.33m. Average = 4.33 ÷ 3 ≈ 1.4433...m. Rounded to 2 d.p. is 1.44m." },
+            { id: 'm2q12', question: "A shop sold 300 apples on Monday. Sales increased by 30% on Tuesday, then decreased by 20% from Tuesday on Wednesday. How many apples were sold on Wednesday?", options: ["312", "306", "234"], correctAnswer: "312", explanation: "Tuesday sales: 300 × 1.30 = 390. Wednesday sales: 390 × 0.80 = 312. (A 20% decrease means 80% of the previous day's sales)." },
+            { id: 'm2q13', question: "In a school, 45% of the students are boys. There are 220 more girls than boys. What is the total number of students?", options: ["2200", "1100", "4400"], correctAnswer: "2200", explanation: "Girls = 100% - 45% = 55%. The difference is 55% - 45% = 10%. This 10% difference equals 220 students. So, 10% = 220. Total (100%) = 10 × 220 = 2200." },
+            { id: 'm2q14', question: "The usual price of a TV was $1500. During a sale, it was sold for $1200. What was the percentage discount?", options: ["20%", "25%", "30%"], correctAnswer: "20%", explanation: "Amount of discount = $1500 - $1200 = $300. Percentage discount = (Discount / Original Price) × 100% = (300 / 1500) × 100% = 20%." },
+            { id: 'm2q15', question: "A library has 60% Chinese books, 25% English books and the rest are Malay books. If there are 120 Malay books, how many English books are there?", options: ["200", "480", "150"], correctAnswer: "200", explanation: "Percentage of Malay books = 100% - 60% - 25% = 15%. So, 15% = 120 books. 1% = 120 ÷ 15 = 8 books. English books (25%) = 25 × 8 = 200." },
+            { id: 'm2q16', question: "A seller had 500 oranges. He sold 40% in the morning and 1/2 of the *remainder* in the afternoon. How many oranges were left?", options: ["150", "100", "200"], correctAnswer: "150", explanation: "Sold in morning: 40% of 500 = 200. Remainder = 500 - 200 = 300. Sold in afternoon: 1/2 of 300 = 150. Oranges left = 300 - 150 = 150." },
+            { id: 'm2q17', question: "A tank was filled with 40.5 litres of water. 1/3 of the water was used. The remaining water was poured into 0.5-litre bottles. How many bottles were filled?", options: ["54", "27", "81"], correctAnswer: "54", explanation: "Water used = 1/3 × 40.5L = 13.5L. Remaining water = 40.5L - 13.5L = 27L. Number of bottles = 27L ÷ 0.5L/bottle = 54 bottles." },
+            { id: 'm2q18', question: "The price of a pen is 80% of the price of a notebook. The total price of 3 pens and 1 notebook is $10.20. Find the price of one notebook.", options: ["$3.00", "$2.40", "$3.40"], correctAnswer: "$3.00", explanation: "Let notebook price be N. Pen price = 0.8N. Total cost: 3(0.8N) + 1N = 10.20.  2.4N + 1N = 10.20.  3.4N = 10.20.  N = 10.20 ÷ 3.4 = $3.00." },
+            { id: 'm2q19', question: "Siti baked a cake. She gave 0.2 of it to her friend and 1/4 of it to her neighbour. What percentage of the cake was left?", options: ["55%", "45%", "65%"], correctAnswer: "55%", explanation: "Convert all to decimals or percentages. 0.2 = 20%. 1/4 = 25%. Total given away = 20% + 25% = 45%. Percentage left = 100% - 45% = 55%." },
+            { id: 'm2q20', question: "25% of coins in a box are 50-cent, 40% are 20-cent and the rest are 10-cent. If the value of 10-cent coins is $3.50, what's the total number of coins?", options: ["100", "70", "200"], correctAnswer: "100", explanation: "Percentage of 10-cent coins = 100% - 25% - 40% = 35%. Number of 10-cent coins = $3.50 ÷ $0.10 = 35. So, 35% of total coins = 35. This means the total number of coins (100%) is 100." }
+        ],
+        "Set 3: Super Challenging (Problem Solving)": [
+            { id: 'm3q1', question: "Box A contained 2/5 of the marbles in Box B. After 36 marbles were transferred from B to A, both had an equal number. How many marbles were in Box B at first?", options: ["120", "84", "140"], correctAnswer: "120", explanation: "Initial ratio A:B is 2:5. Total units = 7. To be equal, each must have 7÷2=3.5 units. A gained 1.5 units (3.5-2). This gain of 1.5 units is 36 marbles. 1 unit = 36 ÷ 1.5 = 24. Box B at first = 5 units = 5 × 24 = 120." },
+            { id: 'm3q2', question: "At a concert, 40% were adults, the rest children. 75% of children were girls. If there were 180 more girls than boys, how many adults were there?", options: ["240", "360", "600"], correctAnswer: "240", explanation: "Children = 60%. Girls = 75% of 60% = 0.75 × 60% = 45% of total. Boys = 25% of 60% = 15% of total. Difference (Girls - Boys) = 45% - 15% = 30% of total. 30% = 180. 10% = 60. Adults (40%) = 4 × 60 = 240." },
+            { id: 'm3q3', question: "Jim spent $120 on a watch, which was 20% of his remaining money. He had earlier spent 1/3 of his total money on a bag. How much money did he have at first?", options: ["$1080", "$900", "$720"], correctAnswer: "$1080", explanation: "Work backwards. Before buying the watch, his remaining money was $120 ÷ 20% = $120 ÷ 0.2 = $600. So before the watch, he had $600 + $120 = $720. This $720 was the remainder (2/3) after buying the bag. 2 units = $720, so 1 unit = $360. Total money at first (3 units) = 3 × $360 = $1080." },
+            { id: 'm3q4', question: "A baker used an equal amount of flour each day. After 4 days, he had 3/5 left. After another 3 days, he had 12 kg left. How much flour did he have at first?", options: ["40 kg", "30 kg", "60 kg"], correctAnswer: "40 kg", explanation: "In 4 days, he used 1 - 3/5 = 2/5 of the flour. Rate of use = (2/5) ÷ 4 days = 1/10 per day. After 7 days (4+3), he used 7 × 1/10 = 7/10. Flour left = 1 - 7/10 = 3/10. So, 3/10 = 12 kg. 1/10 = 4 kg. Total flour at first (10/10) = 10 × 4 kg = 40 kg." },
+            { id: 'm3q5', question: "Amy's stickers is 75% of Ben's. Ben's is 2/3 of Chris's. If Chris has 96 more stickers than Amy, how many stickers do they have altogether?", options: ["416", "384", "192"], correctAnswer: "416", explanation: "A = 3/4 B. B = 2/3 C. Substitute B: A = 3/4 × (2/3 C) = 1/2 C. Ratio A:C is 1:2. The difference is 1 unit. 1 unit = 96. So A=96, C=192. B = 2/3 × 192 = 128. Total = 96 + 128 + 192 = 416." },
+            { id: 'm3q6', question: "Container A and B had 3.6L of water total. After 1/4 of water from A was poured into B, B had twice as much water as A. How much water was in A at first?", options: ["1.6L", "2.0L", "1.2L"], correctAnswer: "1.6L", explanation: "Work backwards. After pouring, the ratio A:B is 1:2. Total 3 units = 3.6L. 1 unit = 1.2L. So after pouring, A had 1.2L. This 1.2L is the 3/4 that was left in A. 3 units = 1.2L, so 1 unit = 0.4L. A's original amount (4 units) = 4 × 0.4L = 1.6L." },
+            { id: 'm3q7', question: "Apples were 2/3 the number of oranges. After selling 80 apples and 30 oranges, oranges were 4 times the apples. How many apples at first?", options: ["116", "174", "58"], correctAnswer: "116", explanation: "Initial ratio A:O is 2u:3u. After selling: (2u-80) apples, (3u-30) oranges. We are told (3u-30) = 4 × (2u-80). 3u-30 = 8u-320. 5u = 290. u = 58. Apples at first = 2u = 2 × 58 = 116." },
+            { id: 'm3q8', question: "A ticket price increased by 20%, but visitor numbers decreased by 10%. What was the percentage change in total revenue?", options: ["8% increase", "10% increase", "2% increase"], correctAnswer: "8% increase", explanation: "Let original price=P, original quantity=Q. Old Revenue=PQ. New Price=1.2P. New Quantity=0.9Q. New Revenue = (1.2P) × (0.9Q) = 1.08PQ. The revenue changed from 1 to 1.08, which is an 8% increase." },
+            { id: 'm3q9', question: "David spent 1/5 of his money and an extra $8 on a book. He then spent 1/3 of the rest and an extra $12 on a calculator, leaving him with $28. How much did he have at first?", options: ["$85.00", "$90.00", "$100.00"], correctAnswer: "$85.00", explanation: "Work backwards. Before calculator: He had $28 + $12 = $40. This was 2/3 of the money. So before spending on calc, he had $40 × 3/2 = $60. Before book: He had $60 + $8 = $68. This was 4/5 of his original money. Original money = $68 × 5/4 = $85." },
+            { id: 'm3q10', question: "Alice received 3/8 of total stickers. Betty received 1/4 of the remaining. Carol received 75 stickers. How many stickers did Alice get?", options: ["60", "72", "120"], correctAnswer: "60", explanation: "Alice gets 3/8. Remainder is 5/8. Betty gets 1/4 of 5/8 = 5/32. Total given to A & B = 3/8 + 5/32 = 12/32 + 5/32 = 17/32. Carol gets the rest: 1 - 17/32 = 15/32. So 15/32 = 75 stickers. 1/32 = 5 stickers. Alice's share (3/8 = 12/32) = 12 × 5 = 60 stickers." },
+            { id: 'm3q11', question: "A box had 50% apples, rest oranges. After selling 60 apples and 1/4 of the oranges, there was an equal number of apples and oranges left. How many fruits at first?", options: ["480", "240", "360"], correctAnswer: "480", explanation: "Initially, A:O ratio is 1:1. Let's say 4u Apples and 4u Oranges for easy division. Sold: 60 apples, 1/4 of 4u=1u oranges. Left: (4u-60) apples, 3u oranges. 4u-60 = 3u. So, u=60. Total fruits at first = 4u + 4u = 8u = 8 × 60 = 480." },
+            { id: 'm3q12', question: "Tom's salary is 25% higher than Ken's. Ken's is 20% lower than Mary's. Their total salary is $8400. What is Tom's salary?", options: ["$3000", "$2400", "$3500"], correctAnswer: "$3000", explanation: "T = 1.25K -> T:K = 5:4. K = 0.8M -> K:M = 4:5. Combine ratios: T:K:M = 5:4:5. Total units = 5+4+5=14. 14 units = $8400. 1 unit = $600. Tom's salary (5 units) = 5 × $600 = $3000." },
+            { id: 'm3q13', question: "2/7 of people at a party were men. There were 40 more women than men. Children were half the number of women. How many people were there?", options: ["210", "150", "180"], correctAnswer: "210", explanation: "Let total be 7u. Men=2u. Women+Children=5u. Let M, W, C be the numbers. W = M+40 = 2u+40. C = W/2 = (2u+40)/2 = u+20. M+W+C = 2u + (2u+40) + (u+20) = 5u+60. This must equal 7u. 7u=5u+60 -> 2u=60 -> u=30. Total people = 7u = 7×30=210." },
+            { id: 'm3q14', question: "A tank is 1/3 full. If 60 litres is added, it becomes 75% full. What is the capacity of the tank?", options: ["144L", "120L", "150L"], correctAnswer: "144L", explanation: "Convert to fractions. 75% = 3/4. The added water filled the difference: 3/4 - 1/3 = 9/12 - 4/12 = 5/12. So 5/12 of the tank = 60L. 1/12 = 60÷5 = 12L. Total capacity (12/12) = 12 × 12L = 144L." },
+            { id: 'm3q15', question: "John spent 20% on a shirt, 60% of the remainder on shoes, and had $72 left. What was the cost of the shoes?", options: ["$108", "$72", "$135"], correctAnswer: "$108", explanation: "Remainder after shirt = 80%. He spent 60% of this 80% on shoes, so he had 40% of the 80% left. 40% of 80% = 0.4 × 0.8 = 0.32 = 32% of original money. 32% = $72. 1% = $72/32 = $2.25. Shoes cost 60% of 80% = 48% of original. Cost = 48 × $2.25 = $108." },
+            { id: 'm3q16', question: "A seller had 180 more pears than apples. After selling 3/4 of pears and 1/2 of apples, he had 120 fruits left. How many pears at first?", options: ["280", "100", "220"], correctAnswer: "280", explanation: "Let A be apples, P be pears. P = A+180. Left: 1/4 P + 1/2 A = 120. Substitute P: 1/4(A+180) + 1/2 A = 120. -> 1/4 A + 45 + 1/2 A = 120. -> 3/4 A = 75. A = 100. Pears at first = 100+180=280." },
+            { id: 'm3q17', question: "The ratio of boys to girls was 5:3. After 16 boys left and 12 girls entered, the numbers became equal. How many children at first?", options: ["112", "80", "32"], correctAnswer: "112", explanation: "Initial state: Boys=5u, Girls=3u. Final state: 5u - 16 = 3u + 12. Rearrange the equation: 2u = 28, so u = 14. Total children at first = 5u + 3u = 8u. 8 × 14 = 112." },
+            { id: 'm3q18', question: "3/5 of visitors were adults, rest children. 1/3 of adults were men. If there were 48 more female adults than male adults, how many children were there?", options: ["96", "144", "72"], correctAnswer: "96", explanation: "Adults=3/5. Men=1/3 of adults = 1/3 × 3/5 = 1/5 of total visitors. Women=2/3 of adults = 2/3 × 3/5 = 2/5 of total visitors. Difference (W-M) = 2/5 - 1/5 = 1/5 of total. 1/5 = 48. Children are 2/5 of total. So, children = 2 × 48 = 96." },
+            { id: 'm3q19', question: "Tap A fills a tank in 6 min. Tap B fills it in 12 min. If both taps are on, what fraction of the tank is filled in 2 minutes?", options: ["1/2", "1/3", "1/4"], correctAnswer: "1/2", explanation: "Rate of Tap A = 1/6 tank/min. Rate of Tap B = 1/12 tank/min. Combined rate = 1/6 + 1/12 = 2/12 + 1/12 = 3/12 = 1/4 tank/min. In 2 minutes, fraction filled = 2 × 1/4 = 1/2." },
+            { id: 'm3q20', question: "A salesman earns 5% commission on the first $2000 of sales, and 8% on sales above $2000. If he sold $6500, what was his total commission?", options: ["$460", "$520", "$360"], correctAnswer: "$460", explanation: "Commission on first $2000 = 5% of $2000 = $100. Sales above $2000 = $6500 - $2000 = $4500. Commission on this amount = 8% of $4500 = $360. Total commission = $100 + $360 = $460." }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const flashcardSetTitle = document.getElementById('flashcardSetTitle'); // ADDED
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-indigo-500 hover:bg-indigo-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+
+        // ADDED: Set the title on the flashcard screen
+        flashcardSetTitle.textContent = setName;
+
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You are a Math Master!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Math' }) // Set subject to "Math"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
