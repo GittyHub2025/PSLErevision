@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Human Systems</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-emerald-200 via-teal-200 to-cyan-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-teal-700">Welcome, Science Explorer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on Human Systems.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-teal-500 focus:border-teal-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6 text-lg">Start Exploring!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-teal-700 mb-2">PSLE Science: Human Systems</h1>
+            <p class="text-slate-600 mb-8">Choose a system to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-teal-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-teal-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-teal-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-teal-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-teal-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleScienceHumanSystemsApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Human Systems ---
+    const allFlashcardSets = {
+        "Set 1: Organs & Basic Functions": [
+            { id: 'h1q1', question: "Which system is responsible for breaking down food?", options: ["Respiratory System", "Digestive System", "Circulatory System"], correctAnswer: "Digestive System", explanation: "The digestive system's main job is to break down large food pieces into small molecules the body can use.", image: null },
+            { id: 'h1q2', question: "Where in the human body does digestion begin?", options: ["Stomach", "Small Intestine", "Mouth"], correctAnswer: "Mouth", explanation: "Digestion starts in the mouth where teeth chew the food and saliva begins to break it down.", image: null },
+            { id: 'h1q3', question: "What is the main function of the lungs?", options: ["Pump blood", "Exchange gases", "Digest food"], correctAnswer: "Exchange gases", explanation: "The lungs are where oxygen from the air we breathe in enters the blood, and carbon dioxide leaves the blood.", image: null },
+            { id: 'h1q4', question: "Which organ pumps blood to all parts of the body?", options: ["Lungs", "Stomach", "Heart"], correctAnswer: "Heart", explanation: "The heart is a powerful muscle that acts as the pump for the circulatory system.", image: null },
+            { id: 'h1q5', question: "What is the tube that carries food from the mouth to the stomach?", options: ["Windpipe", "Gullet", "Small Intestine"], correctAnswer: "Gullet", explanation: "The gullet (or oesophagus) is a muscular tube that pushes food down to the stomach.", image: null },
+            { id: 'h1q6', question: "Which system's main job is to transport oxygen and nutrients around the body?", options: ["Circulatory System", "Digestive System", "Respiratory System"], correctAnswer: "Circulatory System", explanation: "The circulatory system, powered by the heart, is like the body's delivery service.", image: null },
+            { id: 'h1q7', question: "What is the primary role of the stomach?", options: ["To absorb all nutrients", "To churn food with digestive juices", "To absorb water"], correctAnswer: "To churn food with digestive juices", explanation: "The stomach mixes food with acid and enzymes to continue the digestion process.", image: null },
+            { id: 'h1q8', question: "Which of these is NOT part of the human digestive system?", options: ["Small intestine", "Large intestine", "Windpipe"], correctAnswer: "Windpipe", explanation: "The windpipe (trachea) is the tube that carries air to the lungs and is part of the respiratory system.", image: null },
+            { id: 'h1q9', question: "The air we breathe in travels down the windpipe into the ___.", options: ["Heart", "Lungs", "Stomach"], correctAnswer: "Lungs", explanation: "The windpipe branches into smaller tubes that lead directly into the lungs.", image: null },
+            { id: 'h1q10', question: "What protects the heart and lungs in the chest?", options: ["The skull", "The spine", "The rib cage"], correctAnswer: "The rib cage", explanation: "The rib cage forms a bony cage that shields these vital organs from injury.", image: null },
+            { id: 'h1q11', question: "What is the main function of the large intestine?", options: ["To digest food", "To absorb water from undigested food", "To pump blood"], correctAnswer: "To absorb water from undigested food", explanation: "After the small intestine absorbs nutrients, the large intestine absorbs most of the remaining water.", image: null },
+            { id: 'h1q12', question: "Blood is transported around the body inside tubes called ___.", options: ["Air sacs", "Nerves", "Blood vessels"], correctAnswer: "Blood vessels", explanation: "Blood vessels (arteries, veins, and capillaries) form the network of pathways for blood.", image: null },
+            { id: 'h1q13', question: "Which of these systems is responsible for taking in oxygen?", options: ["Digestive System", "Circulatory System", "Respiratory System"], correctAnswer: "Respiratory System", explanation: "The primary purpose of the respiratory system is to bring oxygen into the body and remove carbon dioxide.", image: null },
+            { id: 'h1q14', what: "When we breathe in, our chest ___.", options: ["Gets smaller", "Stays the same size", "Expands"], correctAnswer: "Expands", explanation: "When you inhale, your rib cage moves up and out, and your diaphragm moves down, making your chest bigger.", image: null },
+            { id: 'h1q15', question: "The heart, blood, and blood vessels make up which system?", options: ["Digestive System", "Circulatory System", "Respiratory System"], correctAnswer: "Circulatory System", explanation: "These are the three main components of the circulatory system.", image: null },
+            { id: 'h1q16', question: "Where does most of the absorption of digested food occur?", options: ["Stomach", "Small intestine", "Mouth"], correctAnswer: "Small intestine", explanation: "The small intestine is specially adapted with a huge surface area to absorb the small food molecules into the blood.", image: null },
+            { id: 'h1q17', question: "What waste gas is removed from the body by the lungs?", options: ["Oxygen", "Carbon dioxide", "Nitrogen"], correctAnswer: "Carbon dioxide", explanation: "Carbon dioxide is a waste product of our body's cells, and it's carried by the blood to the lungs to be exhaled.", image: null },
+            { id: 'h1q18', question: "What does the heart pump?", options: ["Air", "Water", "Blood"], correctAnswer: "Blood", explanation: "The heart's continuous pumping action circulates blood throughout the body.", image: null },
+            { id: 'h1q19', question: "What is the nose's function in the respiratory system?", options: ["To cool and dry the air", "To warm, clean, and moisten the air", "To block air from entering"], correctAnswer: "To warm, clean, and moisten the air", explanation: "Hairs and mucus in the nose trap dust, and the blood vessels warm the air before it reaches the lungs.", image: null },
+            { id: 'h1q20', question: "Which organ produces digestive juices but does not have food pass through it?", options: ["Stomach", "Gullet", "Liver"], correctAnswer: "Liver", explanation: "The liver produces bile, which helps digest fats, but food does not travel through the liver itself.", image: null }
+        ],
+        "Set 2: Processes & Pathways": [
+            { id: 'h2q1', question: "Where does the exchange of oxygen and carbon dioxide take place within the lungs?", options: ["In the windpipe", "In the diaphragm", "In the air sacs (alveoli)"], correctAnswer: "In the air sacs (alveoli)", explanation: "The tiny air sacs are surrounded by capillaries, allowing for the efficient transfer of gases between the lungs and the blood.", image: null },
+            { id: 'h2q2', question: "Which blood vessels carry blood AWAY from the heart?", options: ["Veins", "Arteries", "Capillaries"], correctAnswer: "Arteries", explanation: "A simple way to remember: Arteries carry blood 'Away'. They usually carry oxygen-rich blood.", image: null },
+            { id: 'h2q3', question: "Which blood vessels carry blood TOWARDS the heart?", options: ["Veins", "Arteries", "Capillaries"], correctAnswer: "Veins", explanation: "Veins return blood to the heart, and this blood is usually low in oxygen (except for the pulmonary vein).", image: null },
+            { id: 'h2q4', question: "The air we breathe OUT contains more ____ than the air we breathe in.", options: ["Oxygen", "Carbon dioxide", "Nitrogen"], correctAnswer: "Carbon dioxide", explanation: "Our body produces carbon dioxide as a waste product, which is released from the blood into the lungs and then exhaled.", image: null },
+            { id: 'h2q5', question: "What is the correct path of food through the digestive system?", options: ["Mouth -> Stomach -> Gullet -> Small Intestine", "Mouth -> Gullet -> Stomach -> Small Intestine", "Mouth -> Small Intestine -> Stomach -> Gullet"], correctAnswer: "Mouth -> Gullet -> Stomach -> Small Intestine", explanation: "Food is chewed, swallowed down the gullet, churned in the stomach, and then passed to the small intestine for final digestion and absorption.", image: null },
+            { id: 'h2q6', question: "What happens to our breathing rate when we exercise?", options: ["It decreases", "It increases", "It stays the same"], correctAnswer: "It increases", explanation: "During exercise, our muscles need more oxygen, so we breathe faster to supply it.", image: null },
+            { id: 'h2q7', question: "Digested food is absorbed from the small intestine into the ___.", options: ["Stomach", "Lungs", "Bloodstream"], correctAnswer: "Bloodstream", explanation: "The blood in the capillaries of the small intestine picks up the nutrients and transports them around the body.", image: null },
+            { id: 'h2q8', question: "What is the main component of blood that is responsible for carrying oxygen?", options: ["Plasma", "White blood cells", "Red blood cells"], correctAnswer: "Red blood cells", explanation: "Red blood cells contain a special protein called haemoglobin that binds to oxygen in the lungs.", image: null },
+            { id: 'h2q9', question: "When we inhale, the diaphragm muscle...", options: ["contracts and moves down.", "relaxes and moves up.", "does not move."], correctAnswer: "contracts and moves down.", explanation: "When the diaphragm contracts and flattens, it increases the space in the chest, drawing air into the lungs.", image: null },
+            { id: 'h2q10', question: "Blood going from the heart TO the lungs is rich in ___.", options: ["Oxygen", "Digested food", "Carbon dioxide"], correctAnswer: "Carbon dioxide", explanation: "The heart pumps oxygen-poor, carbon dioxide-rich blood to the lungs to get rid of the CO2 and pick up new oxygen.", image: null },
+            { id: 'h2q11', question: "Blood coming FROM the lungs back to the heart is rich in ___.", options: ["Oxygen", "Waste products", "Carbon dioxide"], correctAnswer: "Oxygen", explanation: "After visiting the lungs, the blood is freshly oxygenated and returns to the heart to be pumped to the rest of the body.", image: null },
+            { id: 'h2q12', question: "The tiny, thin-walled blood vessels where substances are exchanged between blood and body cells are called ___.", options: ["Arteries", "Veins", "Capillaries"], correctAnswer: "Capillaries", explanation: "Capillaries are so small and their walls are so thin that oxygen, nutrients, and waste can easily pass through them.", image: null },
+            { id: 'h2q13', question: "The process of digestion is complete in which organ?", options: ["Stomach", "Large intestine", "Small intestine"], correctAnswer: "Small intestine", explanation: "The small intestine is where the final breakdown of food occurs and where almost all absorption of nutrients happens.", image: null },
+            { id: 'h2q14', question: "When we exhale, the rib cage moves...", options: ["upwards and outwards.", "downwards and inwards.", "upwards and inwards."], correctAnswer: "downwards and inwards.", explanation: "This action, along with the diaphragm relaxing upwards, shrinks the chest cavity and pushes air out of the lungs.", image: null },
+            { id: 'h2q15', question: "What is the main role of digestive juices (enzymes)?", options: ["To add water to food", "To speed up the breakdown of food", "To move food along the gullet"], correctAnswer: "To speed up the breakdown of food", explanation: "Enzymes are special proteins that act like chemical scissors, breaking large food molecules into smaller ones much faster.", image: null },
+            { id: 'h2q16', question: "What happens to our heart rate when we exercise?", options: ["It decreases", "It stays the same", "It increases"], correctAnswer: "It increases", explanation: "The heart beats faster to pump more oxygen-rich blood to the working muscles.", image: null },
+            { id: 'h2q17', question: "What is the correct pathway of air from the nose to the air sacs?", options: ["Nose -> Lungs -> Windpipe", "Nose -> Windpipe -> Lungs", "Nose -> Gullet -> Lungs"], correctAnswer: "Nose -> Windpipe -> Lungs", explanation: "Air enters the nose, travels down the windpipe (trachea), which then branches into the lungs.", image: null },
+            { id: 'h2q18', "question": "What happens to food that cannot be digested?", "options": ["It is absorbed into the blood", "It is stored in the stomach", "It passes into the large intestine"], "correctAnswer": "It passes into the large intestine", "explanation": "Indigestible material, like fibre, moves from the small intestine to the large intestine to have water absorbed before being removed." },
+            { id:'h2q19', question: "Which chamber of the heart pumps oxygen-rich blood to the rest of the body?", options: ["Right Atrium", "Right Ventricle", "Left Ventricle"], correctAnswer: "Left Ventricle", explanation: "The left ventricle is the strongest chamber, as it needs to pump blood to the entire body.", image: null},
+            { id: 'h2q20', question: "The air we breathe in is about 21% oxygen. The air we breathe out is about ___ oxygen.", options: ["0%", "16%", "21%"], correctAnswer: "16%", explanation: "We don't use up all the oxygen we breathe in. Our bodies only take what's needed, so a significant amount is exhaled.", image: null }
+        ],
+        "Set 3: System Integration & Critical Thinking": [
+            { id: 'h3q1', question: "Which two systems work together to deliver oxygen from the air to your muscle cells?", options: ["Digestive and Circulatory", "Respiratory and Circulatory", "Digestive and Respiratory"], correctAnswer: "Respiratory and Circulatory", explanation: "The respiratory system gets oxygen into the blood, and the circulatory system transports that blood to the muscles.", image: null },
+            { id: 'h3q2', question: "Why do you get 'out of breath' during intense exercise?", options: ["Your lungs get tired", "Your body needs to remove excess carbon dioxide quickly", "Your stomach is too full"], correctAnswer: "Your body needs to remove excess carbon dioxide quickly", explanation: "Your muscles produce a lot of carbon dioxide, and rapid breathing is the body's way of expelling it and getting more oxygen.", image: null },
+            { id: 'h3q3', question: "How are the walls of the small intestine and the air sacs in the lungs structurally similar for their function?", options: ["Both are thick and muscular", "Both have a large surface area and thin walls", "Both produce digestive juices"], correctAnswer: "Both have a large surface area and thin walls", explanation: "Both structures need to transfer substances efficiently. A large surface area (from folds or many sacs) and thin walls allow for rapid absorption or gas exchange.", image: null },
+            { id: 'h3q4', "question": "After eating a large meal, blood flow to the digestive system increases. Why?", "options": ["To help you feel full", "To deliver more oxygen for digestion and carry away nutrients", "To make the stomach stretch"], "correctAnswer": "To deliver more oxygen for digestion and carry away nutrients", "explanation": "Digestion is an active process that requires energy (oxygen). The increased blood flow also efficiently transports the absorbed nutrients away." },
+            { id: 'h3q5', question: "A person living at high altitude, where air is thin, may develop more red blood cells. Why is this an advantage?", options: ["It makes their blood redder", "It allows their blood to carry more oxygen", "It helps them digest food better"], correctAnswer: "It allows their blood to carry more oxygen", explanation: "Since there's less oxygen in each breath, having more red blood cells (oxygen carriers) helps the body capture as much oxygen as possible.", image: null },
+            { id: 'h3q6', question: "Which two systems work together to transport the sugar from a sweet drink to your brain cells for energy?", options: ["Respiratory and Circulatory", "Digestive and Circulatory", "Nervous and Digestive"], correctAnswer: "Digestive and Circulatory", explanation: "The digestive system absorbs the sugar into the blood, and the circulatory system pumps this sugary blood to the brain.", image: null },
+            { id: 'h3q7', question: "Why is it important to chew food thoroughly before swallowing?", options: ["It makes food taste better", "It increases the surface area for digestive juices to act on", "It helps the gullet to push food down"], correctAnswer: "It increases the surface area for digestive juices to act on", explanation: "Breaking food into smaller pieces allows enzymes to access and break it down much more efficiently and quickly.", image: null },
+            { id: 'h3q8', "question": "What is the journey of a carbon dioxide molecule from a leg muscle to the air outside?", "options": ["Muscle -> Artery -> Heart -> Lungs -> Exhaled", "Muscle -> Vein -> Heart -> Lungs -> Exhaled", "Muscle -> Lungs -> Heart -> Vein -> Exhaled"], "correctAnswer": "Muscle -> Vein -> Heart -> Lungs -> Exhaled", "explanation": "CO2 enters the blood in veins, goes to the heart, is pumped to the lungs, and then breathed out." },
+            { id: 'h3q9', question: "If a person chokes on food, which system is immediately blocked?", options: ["Circulatory system", "Digestive system", "Respiratory system"], correctAnswer: "Respiratory system", explanation: "The food accidentally goes down the windpipe instead of the gullet, blocking the path of air to the lungs.", image: null },
+            { id: 'h3q10', question: "The blood in an artery in the arm is different from the blood in a vein in the arm because the artery blood has more ___.", options: ["Carbon dioxide", "Waste products", "Oxygen"], correctAnswer: "Oxygen", explanation: "Arteries carry oxygen-rich blood from the heart to the body parts, while veins carry oxygen-poor blood back from them.", image: null },
+            { id: 'h3q11', "question": "How does smoking harm the circulatory system?", "options": ["It makes the heart pump slower", "It makes blood vessels narrower and increases blood pressure", "It cleans the blood vessels"], "correctAnswer": "It makes blood vessels narrower and increases blood pressure", "explanation": "Chemicals in smoke damage blood vessels, making them less flexible and leading to higher blood pressure and risk of clots." },
+            { id: 'h3q12', question: "A disease damages the walls of the air sacs. This would most directly affect the...", options: ["pumping of the heart.", "digestion of food.", "transfer of oxygen into the blood."], correctAnswer: "transfer of oxygen into the blood.", explanation: "If the surface for gas exchange is damaged, it becomes much harder for oxygen to get from the lungs into the bloodstream.", image: null },
+            { id: 'h3q13', question: "After vigorous exercise, a person continues to breathe heavily for a while. Why?", options: ["To repay an 'oxygen debt' to the muscles", "Because the lungs are still stretched", "To cool the body down"], correctAnswer: "To repay an 'oxygen debt' to the muscles", explanation: "The muscles work so hard they use oxygen faster than it can be supplied. Heavy breathing afterwards provides the oxygen needed to break down waste products.", image: null },
+            { id: 'h3q14', question: "Why is having a double circulation (one loop to the lungs, one to the body) efficient for mammals?", options: ["It keeps the blood moving slowly", "It ensures high-pressure, oxygen-rich blood goes to the body", "It makes the heart smaller"], correctAnswer: "It ensures high-pressure, oxygen-rich blood goes to the body", explanation: "This system separates oxygen-rich and oxygen-poor blood, allowing for a very efficient delivery of oxygen to support an active, warm-blooded lifestyle.", image: null },
+            { id: 'h3q15', "question": "What is the relationship between the digestive system and cellular respiration?", "options": ["They are the same process", "The digestive system provides the food (glucose) for respiration", "Respiration provides the energy to digest food"], "correctAnswer": "The digestive system provides the food (glucose) for respiration", "explanation": "Digestion breaks food down into glucose, which is then used by the cells in respiration to release energy." },
+            { id: 'h3q16', question: "If a person's diet lacks iron, which process is most affected?", options: ["Digesting fats", "Transporting oxygen in the blood", "Breathing in and out"], correctAnswer: "Transporting oxygen in the blood", explanation: "Iron is a crucial component of red blood cells (haemoglobin). Without enough iron, the blood cannot carry enough oxygen.", image: null },
+            { id: 'h3q17', question: "How does the circulatory system help regulate body temperature?", options: ["By producing sweat", "By changing the amount of blood flowing near the skin", "By making the heart beat faster"], correctAnswer: "By changing the amount of blood flowing near the skin", explanation: "To cool down, more blood flows to the skin to release heat. To stay warm, less blood flows to the skin to conserve heat.", image: null },
+            { id: 'h3q18', "question": "Why would a blockage in a coronary artery (an artery on the heart itself) be very dangerous?", "options": ["It would stop digestion", "It would starve the heart muscle of oxygen", "It would make you breathe too fast"], "correctAnswer": "It would starve the heart muscle of oxygen", "explanation": "The heart is a muscle that needs its own blood supply. Blocking it can damage the heart muscle, leading to a heart attack." },
+            { id: 'h3q19', question: "The diaphragm is a muscle. Which body system controls its contraction and relaxation?", options: ["Circulatory System", "Skeletal System", "Nervous System"], correctAnswer: "Nervous System", explanation: "The nervous system sends signals from the brain to the diaphragm and rib muscles, controlling the automatic process of breathing.", image: null },
+            { id: 'h3q20', question: "What do all three systems—digestive, respiratory, and circulatory—have in common?", options: ["They all break down food", "They all involve the heart", "They all work to supply cells with needed substances"], correctAnswer: "They all work to supply cells with needed substances", explanation: "They form a team: one gets food, one gets oxygen, and one delivers both to every cell in the body.", image: null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-teal-500 hover:bg-teal-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You have mastered these systems!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding of these systems is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
