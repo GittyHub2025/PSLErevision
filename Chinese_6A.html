@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE 华文闪卡 (PSLE Chinese Flashcards)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer { color: white !important; }
+
+        /* NEW: Styles for Enhanced Incorrect Answer Feedback */
+        .feedback-sentence-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 1rem;
+        }
+        .feedback-word-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .feedback-word {
+            font-size: 1.75rem; /* Larger font for the Chinese words */
+            font-weight: 700;
+            line-height: 1.2;
+            color: #ffffff;
+        }
+        .feedback-pinyin {
+            font-size: 0.875rem;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.85);
+        }
+        .english-explanation {
+            font-size: 0.95rem;
+            font-weight: 500;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            margin-top: 1rem;
+            text-align: left;
+        }
+        .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        /* Increased font size for questions and choices */
+        .set23-text #questionText { font-size: 1.875rem; line-height: 2.25rem; } /* text-3xl */
+        .set23-text .choice-button { font-size: 1.25rem; } /* text-xl */
+
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; font-size: 1.125rem; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-rose-100 via-amber-100 to-orange-100 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-red-700">欢迎，华文学习者！</h2>
+                 <p class="text-slate-600 mb-4">请输入你的名字，开始你的PSLE华文复习之旅。</p>
+                 <input type="text" id="userNameInput" placeholder="你的名字" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-red-500 focus:border-red-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-red-500 hover:bg-red-600 text-white w-full py-3 px-6 text-lg">开始学习！</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-red-800 mb-2">PSLE 华文练习</h1>
+            <p class="text-slate-600 mb-8">请选择一个题组来巩固你的知识！</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">进度</span>
+                    <span id="progressText" class="text-sm font-medium text-red-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-red-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <p id="questionText" class="text-2xl md:text-3xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold w-full"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">点击卡片继续...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">返回选题</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-red-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">你的分数:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-red-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">正确率: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">用时: <span id="timeTaken" class="font-semibold"></span> 秒</p>
+
+            <p id="encouragementText" class="text-lg text-red-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">复习错题:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-2 text-slate-600 text-sm"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">太棒了，没有错题！</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">重做错题</button>
+                <button onclick="showSetSelection()" class="action-button bg-red-500 hover:bg-red-600 text-white w-full py-3 px-6">选择其他题组</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+<script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1500;
+    const USER_NAME_STORAGE_KEY = 'psleChineseApp_v2'; // Updated version key
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS with ENHANCED FEEDBACK ---
+    const allFlashcardSets = {
+        "第一组：词语辨析 (Easy)": [
+            { id: 'c1q1', question: "哪个词语的意思是用手推开障碍物？", options: ["拨开", "拉开", "打开"], correctAnswer: "拨开", englishExplanation: "`拨` (bō) means to push aside or to dial. `拨开` (bō kāi) specifically means to push something away, like pushing aside curtains." },
+            { id: 'c1q2', question: "桌子上的书本放（ ）了，请你把它摆正。", options: ["歪斜", "倒下", "端正"], correctAnswer: "歪斜", englishExplanation: "`歪` (wāi) means tilted or crooked. `歪斜` (wāi xié) is a compound word that describes something not being straight or upright." },
+            { id: 'c1q3', question: "过马路时，我们要小心，不要（ ）到别人的脚。", options: ["踩到", "踢到", "碰到"], correctAnswer: "踩到", englishExplanation: "`踩` (cǎi) specifically means to step on something with your foot. `踩到` (cǎi dào) means to have stepped on something." },
+            { id: 'c1q4', question: "妈妈（ ）着弟弟的手，一起去公园散步。", options: ["牵着", "拉着", "握着"], correctAnswer: "牵着", englishExplanation: "`牵` (qiān) means to lead by holding the hand or a rope. It implies gentle guidance, perfect for `牵着手` (qiān zhe shǒu) - holding hands." },
+            { id: 'c1q5', question: "我最喜欢吃妈妈（ ）的荷包蛋。", options: ["煎", "烤", "蒸"], correctAnswer: "煎", englishExplanation: "`煎` (jiān) means to pan-fry with a little oil. It's the correct cooking method for eggs in this context (`煎蛋`)." },
+            { id: 'c1q6', question: "这块饼干又香又（ ），真好吃！", options: ["脆", "软", "硬"], correctAnswer: "脆", englishExplanation: "`脆` (cuì) means crispy or brittle. `香脆` (xiāng cuì - fragrant and crispy) is a common phrase to praise food like biscuits or chips." },
+            { id: 'c1q7', question: "周末，爸爸带我们去乌节路（ ）街。", options: ["逛", "走", "看"], correctAnswer: "逛", englishExplanation: "`逛` (guàng) means to stroll or to window-shop. `逛街` (guàng jiē) is the specific term for shopping or walking around a shopping district." },
+            { id: 'c1q8', question: "这件玩具的（ ）钱是多少？", options: ["价", "值", "宝"], correctAnswer: "价", englishExplanation: "`价` (jià) refers to price. `价钱` (jià qian) is the word for 'price'." },
+            { id: 'c1q9', question: "做人不能（ ）心，要懂得知足。", options: ["贪", "贫", "含"], correctAnswer: "贪", englishExplanation: "`贪` (tān) means greedy. `贪心` (tān xīn) means 'greedy' and fits the context of being content (`知足`)." },
+            { id: 'c1q10', question: "他工作很努力，一点也（ ）手笨脚。", options: ["不笨", "不慢", "不快"], correctAnswer: "不笨", englishExplanation: "`笨` (bèn) means clumsy or foolish. `笨手笨脚` (bèn shǒu bèn jiǎo) is an idiom for being clumsy with one's hands and feet." },
+            { id: 'c1q11', question: "他因为迟到而受到了老师的（ ）。", options: ["惩罚", "夸奖", "批评"], correctAnswer: "惩罚", englishExplanation: "`罚` (fá) is the root character for punishment. `惩罚` (chéng fá) is the formal word for 'punishment'." },
+            { id: 'c1q12', question: "林肯是美国历史上非常（ ）出的总统。", options: ["杰", "优", "好"], correctAnswer: "杰", englishExplanation: "`杰` (jié) means outstanding or heroic. `杰出` (jié chū) means 'distinguished' or 'outstanding', used for remarkable people or achievements." },
+            { id: 'c1q13', question: "妈妈在厨房里喊道：“快来（ ）我把菜端出去！”", options: ["帮", "催", "扶"], correctAnswer: "帮", englishExplanation: "`催` (cuī) means to urge or hurry someone. The question context needs `帮` (bāng) which means 'to help'." },
+            { id: 'c1q14', question: "他生病了，今天（ ）了好几次肚子。", options: ["泻", "拉", "跑"], correctAnswer: "泻", englishExplanation: "`泻` (xiè) means to flow down rapidly, and is used in the term for diarrhea, `泻肚子` (xiè dù zi)." },
+            { id: 'c1q15', question: "这家店的生意很火爆，真是太（ ）害了！", options: ["厉", "严", "凶"], correctAnswer: "厉", englishExplanation: "`厉` (lì) can mean severe, but in `厉害` (lì hai) it means 'awesome' or 'impressive'." },
+            { id: 'c1q16', question: "这句话意（ ）深刻，值得我们好好思考。", options: ["含", "包", "带"], correctAnswer: "含", englishExplanation: "`含` (hán) means to contain or to hold within. `含义` (hán yì) means 'meaning' or 'implication'." },
+            { id: 'c1q17', question: "弟弟的身体很（ ），常常生病。", options: ["瘦弱", "强壮", "健康"], correctAnswer: "瘦弱", englishExplanation: "`弱` (ruò) means weak. `瘦弱` (shòu ruò) means thin and weak, fitting the context of getting sick often." },
+            { id: 'c1q18', question: "他很（ ），自己的事情总是要别人帮忙做。", options: ["懒惰", "勤劳", "努力"], correctAnswer: "懒惰", englishExplanation: "`懒` (lǎn) means lazy. `懒惰` (lǎn duò) is the full word for 'lazy'." },
+            { id: 'c1q19', question: "警察的反应非常（ ），很快就抓住了小偷。", options: ["敏捷", "快速", "迅速"], correctAnswer: "敏捷", englishExplanation: "`敏` (mǐn) relates to being quick and sharp. `敏捷` (mǐn jié) means agile or nimble, describing quick and clever actions." },
+            { id: 'c1q20', question: "这件衣服的（ ）量很好，穿了很久都没有坏。", options: ["质", "数", "重"], correctAnswer: "质", englishExplanation: "`质` (zhì) relates to quality. `质量` (zhì liàng) is the word for 'quality'." }
+        ],
+        "第二组：词语应用 (Medium)": [
+            { id: 'c2q1', question: "看到这个好消息，大家脸上都（ ）出了笑容。", options: ["透露", "牵动", "模仿"], correctAnswer: "透露", correctSentence: [{word:'大家', pinyin:'dà jiā'}, {word:'脸上', pinyin:'liǎn shàng'}, {word:'都', pinyin:'dōu'}, {word:'透露', pinyin:'tòu lù'}, {word:'出', pinyin:'chū'}, {word:'了', pinyin:'le'}, {word:'笑容', pinyin:'xiào róng'}], englishExplanation: "`透露` (tòu lù) means to reveal or let show. Here, it describes smiles naturally appearing on everyone's faces." },
+            { id: 'c2q2', question: "妈妈做的炸鸡又香又（ ），我最喜欢吃了。", options: ["硬", "脆", "酸"], correctAnswer: "脆", correctSentence: [{word:'妈妈', pinyin:'mā ma'}, {word:'做的', pinyin:'zuò de'}, {word:'炸鸡', pinyin:'zhá jī'}, {word:'又香又脆', pinyin:'yòu xiāng yòu cuì'}], englishExplanation: "The phrase `又香又脆` (yòu xiāng yòu cuì) means 'both fragrant and crispy', a common and positive way to describe delicious food like fried chicken." },
+            { id: 'c2q3', question: "为了买到那件限量版的玩具，哥哥一大早就去商店（ ）了。", options: ["插队", "排队", "挤队"], correctAnswer: "排队", correctSentence: [{word:'哥哥', pinyin:'gē ge'}, {word:'去', pinyin:'qù'}, {word:'商店', pinyin:'shāng diàn'}, {word:'排队', pinyin:'pái duì'}, {word:'了', pinyin:'le'}], englishExplanation: "`排队` (pái duì) means to queue up or stand in line, which is the proper behavior. `插队` (chā duì) means to cut in line." },
+            { id: 'c2q4', question: "这家商店的商品（ ）很公道，因此吸引了很多顾客。", options: ["价格", "价值", "假货"], correctAnswer: "价格", correctSentence: [{word:'这家', pinyin:'zhè jiā'}, {word:'商店的', pinyin:'shāng diàn de'}, {word:'商品', pinyin:'shāng pǐn'}, {word:'价格', pinyin:'jià gé'}, {word:'很', pinyin:'hěn'}, {word:'公道', pinyin:'gōng dao'}], englishExplanation: "`价格` (jià gé) means 'price'. `公道` (gōng dao) means fair or reasonable. So, 'the price is reasonable'." },
+            { id: 'c2q5', question: "他因为不肯承认错误，所以受到了老师的（ ）。", options: ["惩罚", "奖励", "表扬"], correctAnswer: "惩罚", correctSentence: [{word:'他', pinyin:'tā'}, {word:'受到了', pinyin:'shòu dào le'}, {word:'老师的', pinyin:'lǎo shī de'}, {word:'惩罚', pinyin:'chéng fá'}], englishExplanation: "`惩罚` (chéng fá) means 'punishment', which is the consequence of not admitting a mistake. `奖励` (jiǎng lì) is a reward." },
+            { id: 'c2q6', question: "消防员（ ）地冲进火场救人，大家都非常敬佩他们。", options: ["勇敢", "害怕", "胆小"], correctAnswer: "勇敢", correctSentence: [{word:'消防员', pinyin:'xiāo fáng yuán'}, {word:'勇敢地', pinyin:'yǒng gǎn de'}, {word:'冲进', pinyin:'chōng jìn'}, {word:'火场', pinyin:'huǒ chǎng'}], englishExplanation: "`勇敢` (yǒng gǎn) means 'brave' or 'courageous', which accurately describes a firefighter's actions." },
+            { id: 'c2q7', question: "在这次的比赛中，我们班（ ）了冠军。", options: ["赢得", "输掉", "失去"], correctAnswer: "赢得", correctSentence: [{word:'我们班', pinyin:'wǒ men bān'}, {word:'赢得', pinyin:'yíng dé'}, {word:'了', pinyin:'le'}, {word:'冠军', pinyin:'guàn jūn'}], englishExplanation: "`赢得` (yíng dé) means to win something (like a prize or a title) through effort. `冠军` (guàn jūn) means 'champion'." },
+            { id: 'c2q8', question: "过马路时，我们应该（ ）交通规则。", options: ["遵守", "违反", "忽略"], correctAnswer: "遵守", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'应该', pinyin:'yīng gāi'}, {word:'遵守', pinyin:'zūn shǒu'}, {word:'交通规则', pinyin:'jiāo tōng guī zé'}], englishExplanation: "`遵守` (zūn shǒu) means to abide by or to comply with. You must abide by traffic rules for safety." },
+            { id: 'c2q9', question: "听了爷爷讲的故事，我心里的（ ）全都消失了。", options: ["疑惑", "问题", "麻烦"], correctAnswer: "疑惑", correctSentence: [{word:'我', pinyin:'wǒ'}, {word:'心里的', pinyin:'xīn lǐ de'}, {word:'疑惑', pinyin:'yí huò'}, {word:'全都', pinyin:'quán dōu'}, {word:'消失了', pinyin:'xiāo shī le'}], englishExplanation: "`疑惑` (yí huò) refers to a feeling of doubt or confusion. It's an internal feeling that can be cleared up by an explanation or story." },
+            { id: 'c2q10', question: "外面下着倾盆大雨，路人只好暂时（ ）在屋檐下。", options: ["躲避", "隐藏", "奔跑"], correctAnswer: "躲避", correctSentence: [{word:'路人', pinyin:'lù rén'}, {word:'只好', pinyin:'zhǐ hǎo'}, {word:'暂时', pinyin:'zàn shí'}, {word:'躲避', pinyin:'duǒ bì'}, {word:'在', pinyin:'zài'}, {word:'屋檐下', pinyin:'wū yán xià'}], englishExplanation: "`躲避` (duǒ bì) means to take shelter or to dodge. Here it means to take shelter from the heavy rain." },
+            { id: 'c2q11', question: "医生仔细地为病人（ ），希望能找出病因。", options: ["检查", "治疗", "看望"], correctAnswer: "检查", correctSentence: [{word:'医生', pinyin:'yī shēng'}, {word:'仔细地', pinyin:'zǐ xì de'}, {word:'为', pinyin:'wèi'}, {word:'病人', pinyin:'bìng rén'}, {word:'检查', pinyin:'jiǎn chá'}], englishExplanation: "`检查` (jiǎn chá) means to examine or check. A doctor first examines a patient to find the cause of illness before treating them." },
+            { id: 'c2q12', question: "我们要养成（ ）的好习惯，不浪费资源。", options: ["勤劳", "勤快", "勤俭"], correctAnswer: "勤俭", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'要', pinyin:'yào'}, {word:'养成', pinyin:'yǎng chéng'}, {word:'勤俭', pinyin:'qín jiǎn'}, {word:'的', pinyin:'de'}, {word:'好习惯', pinyin:'hǎo xí guàn'}], englishExplanation: "`勤俭` (qín jiǎn) means both hardworking and thrifty/frugal. It's about being diligent and not wasteful, which fits the context perfectly." },
+            { id: 'c2q13', question: "他是个（ ）的孩子，从不说谎。", options: ["诚实", "虚假", "狡猾"], correctAnswer: "诚实", correctSentence: [{word:'他', pinyin:'tā'}, {word:'是个', pinyin:'shì ge'}, {word:'诚实', pinyin:'chéng shí'}, {word:'的', pinyin:'de'}, {word:'孩子', pinyin:'hái zi'}], englishExplanation: "`诚实` (chéng shí) means honest. The clue is `从不说谎` (cóng bù shuō huǎng), which means 'never tells lies'." },
+            { id: 'c2q14', question: "姐姐的钢琴表演非常（ ），获得了观众热烈的掌声。", options: ["成功", "胜利", "完成"], correctAnswer: "成功", correctSentence: [{word:'姐姐的', pinyin:'jiě jie de'}, {word:'表演', pinyin:'biǎo yǎn'}, {word:'非常', pinyin:'fēi cháng'}, {word:'成功', pinyin:'chéng gōng'}], englishExplanation: "`成功` (chéng gōng) means successful. It's used to describe an event or performance that went very well. `胜利` (shèng lì) usually refers to victory in a competition." },
+            { id: 'c2q15', question: "为了保护环境，我们应该（ ）使用塑料袋。", options: ["增加", "减少", "停止"], correctAnswer: "减少", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'应该', pinyin:'yīng gāi'}, {word:'减少', pinyin:'jiǎn shǎo'}, {word:'使用', pinyin:'shǐ yòng'}, {word:'塑料袋', pinyin:'sù liào dài'}], englishExplanation: "`减少` (jiǎn shǎo) means to reduce or decrease. Reducing the use of plastic bags is a key step in protecting the environment." },
+            { id: 'c2q16', question: "他在台上演讲时有些（ ），说话有点发抖。", options: ["紧张", "兴奋", "激动"], correctAnswer: "紧张", correctSentence: [{word:'他', pinyin:'tā'}, {word:'在台上', pinyin:'zài tái shàng'}, {word:'有些', pinyin:'yǒu xiē'}, {word:'紧张', pinyin:'jǐn zhāng'}], englishExplanation: "`紧张` (jǐn zhāng) means nervous. The clue is `说话有点发抖` (shuō huà yóu diǎn fā dǒu) - 'voice was trembling a little'." },
+            { id: 'c2q17', question: "这次旅行，我们（ ）了很多美丽的照片。", options: ["拍摄", "拍照", "拍打"], correctAnswer: "拍摄", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'拍摄', pinyin:'pāi shè'}, {word:'了', pinyin:'le'}, {word:'很多', pinyin:'hěn duō'}, {word:'美丽的照片', pinyin:'měi lì de zhào piàn'}], englishExplanation: "`拍摄` (pāi shè) means to film or to shoot a photo/video. It's a slightly more formal term than `拍照` (pāi zhào) and fits well here." },
+            { id: 'c2q18', question: "他（ ）地捂住耳朵，不想听任何噪音。", options: ["迅速", "缓慢", "渐渐"], correctAnswer: "迅速", correctSentence: [{word:'他', pinyin:'tā'}, {word:'迅速地', pinyin:'xùn sù de'}, {word:'捂住', pinyin:'wǔ zhù'}, {word:'耳朵', pinyin:'ěr duo'}], englishExplanation: "`迅速` (xùn sù) means rapidly or swiftly. This word describes the quick action of covering one's ears to block out noise." },
+            { id: 'c2q19', question: "他为人（ ），从不和邻居发生争吵。", options: ["和祥", "慈祥", "祥和"], correctAnswer: "祥和", correctSentence: [{word:'他', pinyin:'tā'}, {word:'为人', pinyin:'wéi rén'}, {word:'祥和', pinyin:'xiáng hé'}], englishExplanation: "`祥和` (xiáng hé) describes a person's temperament as peaceful and amiable. `慈祥` (cí xiáng) is usually used for kind, elderly people." },
+            { id: 'c2q20', question: "面对困难，我们不能（ ）希望。", options: ["放弃", "放手", "放下"], correctAnswer: "放弃", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'不能', pinyin:'bù néng'}, {word:'放弃', pinyin:'fàng qì'}, {word:'希望', pinyin:'xī wàng'}], englishExplanation: "`放弃` (fàng qì) means to give up. The phrase `放弃希望` (fàng qì xī wàng) means 'to give up hope'." }
+        ],
+        "第三组：辨字与理解 (Hard)": [
+            { id: 'c3q1', question: "弟弟不小心把邻居家的窗户（ ）破了。", options: ["杂", "砸", "匝"], correctAnswer: "砸", correctSentence: [{word:'弟弟', pinyin:'dì di'}, {word:'把', pinyin:'bǎ'}, {word:'窗户', pinyin:'chuāng hu'}, {word:'砸破了', pinyin:'zá pò le'}], englishExplanation: "`砸` (zá) means to smash or to pound. It's the correct character for breaking a window. `杂` (zá) means miscellaneous." },
+            { id: 'c3q2', question: "看到弟弟顽皮的（ ）子，妈妈又好气又好笑。", options: ["模", "摸", "膜"], correctAnswer: "模", correctSentence: [{word:'看到', pinyin:'kàn dào'}, {word:'弟弟', pinyin:'dì di'}, {word:'顽皮的', pinyin:'wán pí de'}, {word:'样子', pinyin:'yàng zi'}], englishExplanation: "The word is `样子` (yàng zi), meaning appearance or look. The character is `样` but it uses the `模` from `模样` (mú yàng) as a distractor here. You chose the root component `模`. `摸` (mō) means to touch." },
+            { id: 'c3q3', question: "我们要分（ ）是非，做一个正直的人。", options: ["辨", "辩", "辫"], correctAnswer: "辨", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'要', pinyin:'yào'}, {word:'分辨', pinyin:'fēn biàn'}, {word:'是非', pinyin:'shì fēi'}], englishExplanation: "`分辨` (fēn biàn) means to distinguish or differentiate. `辩` (biàn) is for debate (`辩论`). `辫` (biàn) is for braids (`辫子`)." },
+            { id: 'c3q4', question: "虽然他家境不富裕，但他从不（ ）慕别人的生活。", options: ["羡", "嫌", "歉"], correctAnswer: "羡", correctSentence: [{word:'他', pinyin:'tā'}, {word:'从不', pinyin:'cóng bù'}, {word:'羡慕', pinyin:'xiàn mù'}, {word:'别人', pinyin:'bié rén'}], englishExplanation: "The word is `羡慕` (xiàn mù), which means to envy or admire. `嫌` (xián) means to dislike or complain about." },
+            { id: 'c3q5', question: "他（ ）着一股不服输的劲儿，刻苦练习，终于取得了进步。", options: ["凭", "任", "坪"], correctAnswer: "凭", correctSentence: [{word:'他', pinyin:'tā'}, {word:'凭着', pinyin:'píng zhe'}, {word:'一股', pinyin:'yì gǔ'}, {word:'不服输的劲儿', pinyin:'bù fú shū de jìnr'}], englishExplanation: "`凭着` (píng zhe) means to rely on or to depend on. He relied on his unyielding spirit to succeed." },
+            { id: 'c3q6', question: "这次考试的范围很（ ），我们要好好复习。", options: ["广", "厂", "犷"], correctAnswer: "广", correctSentence: [{word:'考试', pinyin:'kǎo shì'}, {word:'的', pinyin:'de'}, {word:'范围', pinyin:'fàn wéi'}, {word:'很', pinyin:'hěn'}, {word:'广', pinyin:'guǎng'}], englishExplanation: "`广` (guǎng) means wide or extensive. `范围很广` means the scope is very wide. `厂` (chǎng) means factory." },
+            { id: 'c3q7', question: "医生提醒我们要（ ）意饮食卫生，预防疾病。", options: ["注", "住", "柱"], correctAnswer: "注", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'要', pinyin:'yào'}, {word:'注意', pinyin:'zhù yì'}, {word:'饮食卫生', pinyin:'yǐn shí wèi shēng'}], englishExplanation: "`注意` (zhù yì) means to pay attention to. `住` (zhù) means to live. `柱` (zhù) means pillar." },
+            { id: 'c3q8', question: "妈妈把碗碟整齐地放进（ ）柜里。", options: ["厨", "橱", " chú"], correctAnswer: "橱", correctSentence: [{word:'妈妈', pinyin:'mā ma'}, {word:'把', pinyin:'bǎ'}, {word:'碗碟', pinyin:'wǎn dié'}, {word:'放进', pinyin:'fàng jìn'}, {word:'橱柜里', pinyin:'chú guì lǐ'}], englishExplanation: "`橱柜` (chú guì) is the word for a cupboard or cabinet. It has the 'wood' radical (木). `厨房` (chú fáng), kitchen, uses a different `厨`." },
+            { id: 'c3q9', question: "他因为在考试中作（ ），被取消了成绩。", options: ["弊", "币", "敝"], correctAnswer: "弊", correctSentence: [{word:'他', pinyin:'tā'}, {word:'在', pinyin:'zài'}, {word:'考试中', pinyin:'kǎo shì zhōng'}, {word:'作弊', pinyin:'zuò bì'}], englishExplanation: "`作弊` (zuò bì) is the specific term for cheating in an exam. `币` (bì) refers to currency." },
+            { id: 'c3q10', question: "我们要珍惜时间，不要（ ）费光阴。", options: ["浪", "良", "狼"], correctAnswer: "浪", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'要', pinyin:'yào'}, {word:'珍惜时间', pinyin:'zhēn xī shí jiān'}, {word:'不要', pinyin:'bú yào'}, {word:'浪费', pinyin:'làng fèi'}, {word:'光阴', pinyin:'guāng yīn'}], englishExplanation: "`浪费` (làng fèi) means to waste. `光阴` (guāng yīn) is a literary term for time. So, 'do not waste time'." },
+            { id: 'c3q11', question: "这件衣服的（ ）料很舒服，穿在身上很凉快。", options: ["材", "才", "财"], correctAnswer: "材", correctSentence: [{word:'这件', pinyin:'zhè jiàn'}, {word:'衣服的', pinyin:'yī fu de'}, {word:'材料', pinyin:'cái liào'}, {word:'很', pinyin:'hěn'}, {word:'舒服', pinyin:'shū fu'}], englishExplanation: "`材料` (cái liào) means material or fabric. `才` (cái) is for talent. `财` (cái) is for wealth." },
+            { id: 'c3q12', question: "这次华文测（ ）的成绩，我进步了很多。", options: ["捡", "验", "险"], correctAnswer: "验", correctSentence: [{word:'这次', pinyin:'zhè cì'}, {word:'华文', pinyin:'huá wén'}, {word:'测验', pinyin:'cè yàn'}, {word:'的', pinyin:'de'}, {word:'成绩', pinyin:'chéng jì'}, {word:'进步了', pinyin:'jìn bù le'}], englishExplanation: "`测验` (cè yàn) means test or quiz. `捡` (jiǎn) means to pick up. `险` (xiǎn) means danger." },
+            { id: 'c3q13', question: "失败并不可怕，可怕的是失去（ ）斗的勇气。", options: ["奋", "愤", "份"], correctAnswer: "奋", correctSentence: [{word:'可怕的是', pinyin:'kě pà de shì'}, {word:'失去', pinyin:'shī qù'}, {word:'奋斗', pinyin:'fèn dòu'}, {word:'的', pinyin:'de'}, {word:'勇气', pinyin:'yǒng qì'}], englishExplanation: "`奋斗` (fèn dòu) means to struggle or to strive. It refers to the effort one puts in. `愤` (fèn) is for anger." },
+            { id: 'c3q14', question: "我们要学会（ ）心等待，不要急躁。", options: ["耐", "奈", "nài"], correctAnswer: "耐", correctSentence: [{word:'我们', pinyin:'wǒ men'}, {word:'要', pinyin:'yào'}, {word:'学会', pinyin:'xué huì'}, {word:'耐心', pinyin:'nài xīn'}, {word:'等待', pinyin:'děng dài'}], englishExplanation: "`耐心` (nài xīn) is the word for patience. The character `耐` means to endure or to be patient." },
+            { id: 'c3q15', question: "他（ ）决不向困难低头。", options: ["坚", "监", "艰"], correctAnswer: "坚", correctSentence: [{word:'他', pinyin:'tā'}, {word:'坚决', pinyin:'jiān jué'}, {word:'不向', pinyin:'bú xiàng'}, {word:'困难', pinyin:'kùn nan'}, {word:'低头', pinyin:'dī tóu'}], englishExplanation: "`坚决` (jiān jué) means firmly or resolutely. It expresses a very strong determination." },
+            { id: 'c3q16', question: "这道题的解题步（ ）很复杂。", options: ["骤", "聚", "取"], correctAnswer: "骤", correctSentence: [{word:'这道题的', pinyin:'zhè dào tí de'}, {word:'解题', pinyin:'jiě tí'}, {word:'步骤', pinyin:'bù zhòu'}, {word:'很复杂', pinyin:'hěn fù zá'}], englishExplanation: "`步骤` (bù zhòu) means steps or procedure. It refers to the sequence of actions needed to solve a problem." },
+            { id: 'c3q17', question: "我军势如破竹，一（ ）千里，很快就取得了胜利。", options: ["泄", "泻", "卸"], correctAnswer: "泻", correctSentence: [{word:'我军', pinyin:'wǒ jūn'}, {word:'势如破竹', pinyin:'shì rú pò zhú'}, {word:'一泻千里', pinyin:'yī xiè qiān lǐ'}], englishExplanation: "The idiom is `一泻千里` (yī xiè qiān lǐ), which means 'to rush down a thousand miles'. It describes something (like an army's advance) that is swift and unstoppable. Use `泻` (xiè)." },
+            { id: 'c3q18', question: "他不小心把墨水弄翻，（ ）脏了新买的白衬衫。", options: ["污", "亏", "于"], correctAnswer: "污", correctSentence: [{word:'他', pinyin:'tā'}, {word:'弄翻了', pinyin:'nòng fān le'}, {word:'墨水', pinyin:'mò shuǐ'}, {word:'污脏了', pinyin:'wū zāng le'}, {word:'白衬衫', pinyin:'bái chèn shān'}], englishExplanation: "`污` (wū) means dirt or to stain. The word `污脏` (wū zāng) or `弄脏` (nòng zāng) means to make something dirty." },
+            { id: 'c3q19', question: "他这个人很（ ）猾，你跟他打交道要小心。", options: ["狡", "较", "校"], correctAnswer: "狡", correctSentence: [{word:'他这个人', pinyin:'tā zhè ge rén'}, {word:'很', pinyin:'hěn'}, {word:'狡猾', pinyin:'jiǎo huá'}], englishExplanation: "`狡猾` (jiǎo huá) means cunning or crafty. It's a negative trait. `较` (jiào) means to compare. `校` (xiào) means school." },
+            { id: 'c3q20', question: "他设计的建筑（ ）式新颖，赢得了设计大奖。", options: ["格式", "方式", "式样"], correctAnswer: "式样", correctSentence: [{word:'他', pinyin:'tā'}, {word:'设计的', pinyin:'shè jì de'}, {word:'建筑', pinyin:'jiàn zhù'}, {word:'式样', pinyin:'shì yàng'}, {word:'新颖', pinyin:'xīn yǐng'}], englishExplanation: "`式样` (shì yàng) refers to the style or design of an object. `格式` (gé shì) is for format (like a document). `方式` (fāng shì) is for method." }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `开始 ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-red-500 hover:bg-red-600 text-white mb-3 last:mb-0 text-lg`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : '学习者';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        
+        // Add class for font styling if Set 2 or 3
+        if (setName.includes("第二组") || setName.includes("第三组")) {
+            flashcardScreen.classList.add('set23-text');
+        } else {
+            flashcardScreen.classList.remove('set23-text');
+        }
+
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700';
+            if (flashcardScreen.classList.contains('set23-text')) {
+                btn.classList.add('text-xl');
+            }
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.innerHTML = questionData.question.replace(/\n/g, '<br>');
+        
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            feedbackText.textContent = '正确!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = `choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 shadow-md ${flashcardScreen.classList.contains('set23-text') ? 'text-xl' : ''}`;
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden'); 
+            
+            // --- NEW Enhanced Feedback Generation ---
+            let feedbackHTML = '';
+            // Display sentence with pinyin if available
+            if (questionData.correctSentence && Array.isArray(questionData.correctSentence)) {
+                let sentenceHTML = '<div class="feedback-sentence-container">';
+                questionData.correctSentence.forEach(item => {
+                    sentenceHTML += `
+                        <div class="feedback-word-group">
+                            <div class="feedback-word">${item.word}</div>
+                            <div class="feedback-pinyin">${item.pinyin}</div>
+                        </div>
+                    `;
+                });
+                sentenceHTML += '</div>';
+                feedbackHTML += sentenceHTML;
+            } else {
+                // Fallback for Set 1 or if sentence is not provided
+                 feedbackHTML += `<div>正确答案: <span class="font-bold text-2xl">${correctAnswer}</span></div>`;
+            }
+
+            // Display English explanation
+            if (questionData.englishExplanation) {
+                feedbackHTML += `<div class="english-explanation">${questionData.englishExplanation}</div>`;
+            }
+
+            feedbackHTML += `<div class="prompt-guidance">点击绿色正确答案继续。</div>`;
+            feedbackText.innerHTML = feedbackHTML;
+            // --- End of Enhanced Feedback ---
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                const baseClass = flashcardScreen.classList.contains('set23-text') ? 'text-xl' : '';
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = `choice-button bg-emerald-500 hover:bg-emerald-600 text-white ${baseClass}`;
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = `choice-button bg-red-700 text-white ring-2 ring-red-900 shadow-md ${baseClass}`;
+                } else {
+                    btn.className = `choice-button bg-slate-200 text-slate-500 forced-disabled-look ${baseClass}`;
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? '错题复习完成！' : `“${currentSetData.setName || '练习'}”完成!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "太棒了，满分！你已经掌握了这个部分！";
+        else if (percentage >= 70) encouragementTextEl.textContent = "做得很好！继续努力，你非常出色。";
+        else encouragementTextEl.textContent = "不错！复习一下错题，可以让你更强大。";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>问题:</b> ${item.questionData.question.replace(/\n/g, ' ')}<br/><b>你的答案:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>正确答案:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Chinese' })
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (重做)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (重做)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
