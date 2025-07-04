@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE Science: Energy Conversion</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer,
+        .correct-state-static #questionImagePlaceholder { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer,
+        .incorrect-state #questionImagePlaceholder { color: white !important; }
+        .incorrect-state .explanation-box {
+            font-size: 0.875rem; display: block; margin-top: 0.5rem; font-weight: normal;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .incorrect-state .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 0.75rem; font-weight: normal;
+        }
+
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-emerald-200 via-teal-200 to-cyan-200 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-teal-700">Welcome, Science Explorer!</h2>
+                 <p class="text-slate-600 mb-4">Enter your name to start your revision on Energy Conversion.</p>
+                 <input type="text" id="userNameInput" placeholder="Your Name" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-teal-500 focus:border-teal-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6 text-lg">Start Exploring!</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-teal-700 mb-2">PSLE Science: Energy Conversion</h1>
+            <p class="text-slate-600 mb-8">Choose a topic to master!</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4">
+                <!-- Buttons for flashcard sets will be dynamically added here by JS -->
+            </div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">Progress</span>
+                    <span id="progressText" class="text-sm font-medium text-teal-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-teal-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <img id="questionImage" src="" alt="Question image" class="hidden mx-auto mb-4 max-h-40 h-auto w-auto object-contain rounded">
+                     <p id="questionText" class="text-lg md:text-xl font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">Tap card to continue...</p>
+                 </div>
+            </div>
+
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md-text-lg"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">Back to Set Selection</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-teal-700 mb-4"></h2>
+
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">Your Score:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-teal-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">Percentage: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">Time: <span id="timeTaken" class="font-semibold"></span> seconds</p>
+
+            <p id="encouragementText" class="text-lg text-teal-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">Review Incorrect Answers:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-1 text-slate-600"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">Great job, no incorrect answers!</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">Redo Incorrect</button>
+                <button onclick="showSetSelection()" class="action-button bg-teal-500 hover:bg-teal-600 text-white w-full py-3 px-6">Choose Another Set</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1200;
+    const USER_NAME_STORAGE_KEY = 'psleScienceEnergyApp_v1';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS: PSLE Science - Energy Conversion ---
+    const allFlashcardSets = {
+        "Set 1: Forms & Basic Conversions": [
+            { id: 'e1q1', question: "The energy of a moving object is called ___.", options: ["Potential energy", "Kinetic energy", "Chemical energy"], correctAnswer: "Kinetic energy", explanation: "Kinetic energy is the energy of motion. Anything that moves has kinetic energy.", image: null },
+            { id: 'e1q2', question: "What form of energy is stored in a battery?", options: ["Electrical energy", "Light energy", "Chemical energy"], correctAnswer: "Chemical energy", explanation: "Batteries store energy in chemical compounds, which can be converted to electrical energy.", image: null },
+            { id: 'e1q3', question: "When you switch on a lamp, electrical energy is mainly converted into ___.", options: ["Heat and Sound energy", "Light and Heat energy", "Kinetic and Light energy"], correctAnswer: "Light and Heat energy", explanation: "A lamp is designed to produce light, but it also produces heat as a by-product.", image: null },
+            { id: 'e1q4', question: "The sun provides Earth with mainly which two forms of energy?", options: ["Kinetic and Sound", "Chemical and Electrical", "Light and Heat"], correctAnswer: "Light and Heat", explanation: "The sun is our primary source of light and heat energy.", image: null },
+            { id: 'e1q5', question: "Stored energy is also known as ___ energy.", options: ["Kinetic", "Potential", "Sound"], correctAnswer: "Potential", explanation: "Potential energy is energy that is stored and waiting to be used, like a ball at the top of a hill.", image: null },
+            { id: 'e1q6', question: "A stretched rubber band has ___ energy.", options: ["Elastic potential", "Gravitational potential", "Kinetic"], correctAnswer: "Elastic potential", explanation: "This is a type of stored energy in an object that is stretched or compressed.", image: null },
+            { id: 'e1q7', question: "The process of photosynthesis in plants is an example of ___.", options: ["Chemical energy to Light energy", "Light energy to Chemical energy", "Kinetic energy to Heat energy"], correctAnswer: "Light energy to Chemical energy", explanation: "Plants use light from the sun to create chemical energy (food).", image: null },
+            { id: 'e1q8', question: "What energy conversion happens when you clap your hands?", options: ["Sound to Kinetic", "Kinetic to Sound", "Potential to Sound"], correctAnswer: "Kinetic to Sound", explanation: "The motion of your hands (kinetic energy) is converted into sound energy (and some heat).", image: null },
+            { id: 'e1q9', question: "An apple falling from a tree is an example of ___ energy converting to ___ energy.", options: ["Kinetic to Potential", "Potential to Kinetic", "Chemical to Kinetic"], correctAnswer: "Potential to Kinetic", explanation: "The apple has stored (potential) energy at the top, which becomes motion (kinetic) energy as it falls.", image: null },
+            { id: 'e1q10', question: "The main purpose of a guitar is to convert kinetic energy from plucking the strings into ___ energy.", options: ["Light", "Heat", "Sound"], correctAnswer: "Sound", explanation: "The vibration of the strings (kinetic energy) creates sound waves.", image: null },
+            { id: 'e1q11', question: "Which of these is the best example of chemical energy?", options: ["A moving bicycle", "A piece of wood", "A ringing bell"], correctAnswer: "A piece of wood", explanation: "Wood, like food and fuel, stores chemical energy that can be released by burning.", image: null },
+            { id: 'e1q12', question: "When a candle burns, the main energy conversion is from chemical energy to ___.", options: ["Light and Heat energy", "Electrical energy", "Kinetic energy"], correctAnswer: "Light and Heat energy", explanation: "Burning the wax (chemical energy) produces a flame, which gives off light and heat.", image: null },
+            { id: 'e1q13', question: "A spinning fan blade primarily has which form of energy?", options: ["Potential energy", "Kinetic energy", "Chemical energy"], correctAnswer: "Kinetic energy", explanation: "The fan blades are in motion, so they have kinetic energy.", image: null },
+            { id: 'e1q14', question: "The food we eat contains ___ energy, which our body converts into other forms to live.", options: ["Light", "Sound", "Chemical"], correctAnswer: "Chemical", explanation: "Our bodies break down the chemical bonds in food to release energy for movement, warmth, and other life processes.", image: null },
+            { id: 'e1q15', "question": "What is the main energy conversion in a solar panel?", "options": ["Light to Electrical", "Heat to Light", "Chemical to Electrical"], "correctAnswer": "Light to Electrical", "explanation": "Solar panels are specifically designed to capture light energy and convert it directly into electrical energy." },
+            { id: 'e1q16', question: "A doorbell converts electrical energy into ___ energy.", options: ["Light", "Sound", "Chemical"], correctAnswer: "Sound", explanation: "The primary function of a doorbell is to make a sound to alert people.", image: null },
+            { id: 'e1q17', question: "What form of energy does a book have when it is held high up?", options: ["Gravitational potential energy", "Elastic potential energy", "Kinetic energy"], correctAnswer: "Gravitational potential energy", explanation: "This is stored energy an object has due to its height in a gravitational field.", image: null },
+            { id: 'e1q18', "question": "What is the Law of Conservation of Energy?", "options": ["Energy can be created from nothing", "Energy cannot be created or destroyed", "Energy is always lost in a system"], "correctAnswer": "Energy cannot be created or destroyed", "explanation": "This fundamental law states that energy only changes from one form to another." },
+            { id: 'e1q19', question: "A moving train has a lot of ___ energy.", options: ["Potential", "Kinetic", "Chemical"], correctAnswer: "Kinetic", explanation: "The train is a large object in motion, so it possesses a great deal of kinetic energy.", image: null },
+            { id: 'e1q20', question: "When you use a brake on a bicycle, kinetic energy is converted mainly into ___.", options: ["Light energy", "Heat energy", "Sound energy"], correctAnswer: "Heat energy", explanation: "The friction between the brake pads and the wheel converts the energy of motion into heat.", image: null }
+        ],
+        "Set 2: Energy Conversion Chains": [
+            { id: 'e2q1', question: "In a battery-powered torchlight, what is the correct energy conversion chain?", options: ["Chemical -> Light -> Electrical", "Electrical -> Chemical -> Light", "Chemical -> Electrical -> Light + Heat"], correctAnswer: "Chemical -> Electrical -> Light + Heat", explanation: "The battery (chemical) powers the circuit (electrical), which makes the bulb glow (light) and get warm (heat).", image: null },
+            { id: 'e2q2', "question": "When a fan is switched on, electrical energy is converted into kinetic energy. What is an unwanted energy form also produced?", "options": ["Light energy", "Sound and Heat energy", "Chemical energy"], "correctAnswer": "Sound and Heat energy", "explanation": "The motor gets warm (heat) and the moving blades and motor make a noise (sound). These are not the fan's main purpose." },
+            { id: 'e2q3', question: "A boy eats an apple and then runs a race. The main energy conversion is ___.", options: ["Kinetic -> Chemical -> Heat", "Chemical -> Kinetic + Heat", "Light -> Chemical -> Kinetic"], correctAnswer: "Chemical -> Kinetic + Heat", explanation: "The chemical energy from the apple is used for running (kinetic) and also warms up his body (heat).", image: null },
+            { id: 'e2q4', "question": "A ball held at the top of a ramp has maximum ___ energy.", "options": ["Kinetic", "Potential", "Sound"], "correctAnswer": "Potential", "explanation": "At its highest point, before it starts moving, its stored gravitational potential energy is at its maximum." },
+            { id: 'e2q5', "question": "As a ball rolls down a ramp, its potential energy ___ and its kinetic energy ___.", "options": ["increases, decreases", "decreases, increases", "stays the same, increases"], "correctAnswer": "decreases, increases", "explanation": "As the ball loses height, its stored potential energy is converted into the energy of motion (kinetic energy)." },
+            { id: 'e2q6', question: "What is the main energy conversion that happens in a wind turbine?", options: ["Heat to Electrical", "Kinetic to Electrical", "Light to Kinetic"], correctAnswer: "Kinetic to Electrical", explanation: "The movement of the wind (kinetic energy) turns the blades, which spin a generator to produce electricity.", image: null },
+            { id: 'e2q7', "question": "A portable radio is powered by batteries. What is the energy conversion when it is playing music?", "options": ["Electrical -> Sound", "Chemical -> Sound", "Chemical -> Electrical -> Sound"], "correctAnswer": "Chemical -> Electrical -> Sound", "explanation": "The battery's chemical energy becomes electrical energy in the circuit, which the speaker then converts into sound energy." },
+            { id: 'e2q8', question: "When you strike a match, the friction provides heat to start a chemical reaction. The conversion is ___.", options: ["Kinetic -> Heat -> Chemical -> Light", "Chemical -> Light + Heat", "Kinetic -> Heat + Light"], correctAnswer: "Kinetic -> Heat -> Chemical -> Light", explanation: "The initial rubbing (kinetic) creates heat, which triggers the chemical energy in the match head to release as light and more heat.", image: null },
+            { id: 'e2q9', "question": "A hydroelectric dam generates electricity. What is the energy of the water stored behind the dam?", "options": ["Kinetic energy", "Gravitational potential energy", "Electrical energy"], "correctAnswer": "Gravitational potential energy", "explanation": "The water is stored at a height, giving it a large amount of gravitational potential energy, which is converted to kinetic energy when it flows down." },
+            { id: 'e2q10', question: "A solar-powered toy car moves when placed in the sun. What is the energy conversion?", options: ["Light -> Chemical -> Kinetic", "Light -> Electrical -> Kinetic", "Kinetic -> Electrical -> Light"], correctAnswer: "Light -> Electrical -> Kinetic", explanation: "The solar cell converts light to electricity, which then powers the motor to make the car move (kinetic).", image: null },
+            { id: 'e2q11', question: "When you talk on a mobile phone, your voice (sound energy) is first converted into ___ to be transmitted.", options: ["Light energy", "Electrical signals", "Heat energy"], correctAnswer: "Electrical signals", explanation: "The microphone converts sound waves into electrical signals, which are then transmitted. The phone's speaker reverses this process.", image: null },
+            { id: 'e2q12', question: "A toaster is designed to convert electrical energy into ___.", options: ["Kinetic energy", "Sound energy", "Heat energy"], correctAnswer: "Heat energy", explanation: "The primary purpose of a toaster is to use electricity to generate heat to toast bread.", image: null },
+            { id: 'e2q13', "question": "At the highest point of its flight, a thrown ball has maximum ___ energy.", "options": ["Potential", "Kinetic", "Both are maximum"], "correctAnswer": "Potential", "explanation": "At its peak, the ball momentarily stops moving upwards, so kinetic energy is at its minimum and potential energy (height) is at its maximum." },
+            { id: 'e2q14', question: "Why does a bouncing ball eventually stop bouncing?", options: ["It runs out of potential energy", "Energy is lost as heat and sound with each bounce", "Gravity gets stronger over time"], correctAnswer: "Energy is lost as heat and sound with each bounce", explanation: "With each bounce on the floor, some kinetic energy is converted into unwanted heat and sound, so it has less energy for the next bounce.", image: null },
+            { id: 'e2q15', question: "Burning coal in a power plant follows which energy path to make electricity?", options: ["Chemical -> Heat -> Kinetic -> Electrical", "Chemical -> Electrical -> Kinetic", "Kinetic -> Heat -> Electrical"], correctAnswer: "Chemical -> Heat -> Kinetic -> Electrical", explanation: "Coal (chemical) is burned to make heat, which boils water to make steam (kinetic), which turns a turbine (kinetic), which spins a generator (electrical).", image: null },
+            { id: 'e2q16', question: "When you rub your hands together to warm them up, you are converting ___.", options: ["Heat to Kinetic", "Kinetic to Heat", "Potential to Heat"], correctAnswer: "Kinetic to Heat", explanation: "The energy of motion (kinetic) from rubbing creates friction, which generates heat.", image: null },
+            { id: 'e2q17', question: "A television set produces mainly light and sound energy. What is the main 'wasted' energy form?", options: ["Electrical energy", "Heat energy", "Chemical energy"], correctAnswer: "Heat energy", explanation: "TVs get warm during use. This heat is a by-product and not the intended purpose, so it's considered wasted energy.", image: null },
+            { id: 'e2q18', "question": "In a car engine, the chemical energy in petrol is converted into ___ to move the car.", "options": ["Light energy", "Electrical energy", "Kinetic energy"], "correctAnswer": "Kinetic energy", "explanation": "Burning petrol releases energy that pushes pistons, ultimately turning the wheels. A lot of heat and sound are also produced as by-products." },
+            { id: 'e2q19', "question": "What energy is converted when a meteor enters Earth's atmosphere and burns up?", "options": ["Kinetic to Light and Heat", "Chemical to Light and Heat", "Potential to Chemical"], "correctAnswer": "Kinetic to Light and Heat", "explanation": "The meteor's high speed (kinetic energy) creates immense friction with the air, which generates intense light and heat." },
+            { id: 'e2q20', question: "A weightlifter lifts a barbell. What is the main energy conversion happening in his muscles?", options: ["Kinetic to Potential", "Chemical to Kinetic", "Potential to Chemical"], correctAnswer: "Chemical to Kinetic", explanation: "His muscles use chemical energy from food to create the motion (kinetic energy) needed to lift the weight.", image: null }
+        ],
+        "Set 3: Application & Conservation": [
+            { id: 'e3q1', "question": "Trace the energy of a running person, who ate a chicken that ate corn, back to its original source.", "options": ["Corn -> Chicken -> Person", "Sun -> Corn -> Chicken -> Person", "Earth -> Corn -> Chicken -> Person"], "correctAnswer": "Sun -> Corn -> Chicken -> Person", "explanation": "The ultimate source of energy for most life on Earth is the sun, which the corn plant converted to chemical energy." },
+            { id: 'e3q2', question: "Why does a bouncy ball not bounce back to the height it was dropped from?", options: ["Gravity pulls it down", "Some energy is converted to sound and heat", "The ball gets tired"], correctAnswer: "Some energy is converted to sound and heat", explanation: "Due to the Law of Conservation of Energy, the initial potential energy is converted not only to kinetic energy for the bounce but also to unwanted sound and heat, leaving less energy for the next bounce.", image: null },
+            { id: 'e3q3', "question": "A hairdryer and a space heater both use 1000W of power. Which is more efficient at ONLY producing heat?", "options": ["The hairdryer", "The space heater", "They are equally efficient"], "correctAnswer": "The space heater", "explanation": "The hairdryer converts some electrical energy into kinetic energy (for the fan) and sound. The space heater converts almost all its electrical energy into just heat, making it more efficient for that single purpose." },
+            { id: 'e3q4', "question": "Two identical balls are released from the top of two frictionless slides of the same height, but different shapes. Which ball is faster at the bottom?", "options": ["The ball on the steeper slide", "The ball on the gentler slide", "They have the same speed"], "correctAnswer": "They have the same speed", "explanation": "Because they start with the same gravitational potential energy (same height) and there is no friction, all of it is converted to kinetic energy. They will have the same speed at the bottom, though they may arrive at different times." },
+            { id: 'e3q5', question: "Friction is a force that often converts kinetic energy into ___.", options: ["Light energy", "Potential energy", "Heat energy"], correctAnswer: "Heat energy", explanation: "Friction opposes motion by converting the energy of movement into thermal energy, which is why things like engine parts and brakes get hot.", image: null },
+            { id: 'e3q6', "question": "Why does a car with a more streamlined shape use less fuel at high speeds?", "options": ["It is lighter", "It converts less kinetic energy into heat due to air resistance", "It has a bigger engine"], "correctAnswer": "It converts less kinetic energy into heat due to air resistance", "explanation": "A streamlined shape reduces air resistance (a form of friction). This means less energy is wasted fighting the air, so more of the fuel's chemical energy becomes useful kinetic energy." },
+            { id: 'e3q7', question: "A 100W incandescent light bulb and a 15W LED bulb produce the same amount of light. Why?", options: ["The LED is more efficient at converting electricity to light", "The incandescent bulb is older", "The LED uses a different type of electricity"], correctAnswer: "The LED is more efficient at converting electricity to light", explanation: "The LED bulb converts a larger percentage of electrical energy into light and wastes less as heat compared to the incandescent bulb.", image: null },
+            { id: 'e3q8', "question": "Imagine a pendulum swinging. At the bottom of its swing, which statement is true?", "options": ["Potential energy is max, kinetic is min", "Kinetic energy is max, potential is min", "Both are at their maximum"], "correctAnswer": "Kinetic energy is max, potential is min", "explanation": "At the lowest point, it has the least height (minimum potential energy) and is moving fastest (maximum kinetic energy)." },
+            { id: 'e3q9', "question": "A person stands on a diving board. What is the energy conversion as they jump up and then fall into the water?", "options": ["Elastic Potential -> Kinetic -> Gravitational Potential -> Kinetic", "Kinetic -> Potential -> Sound", "Chemical -> Elastic -> Heat"], "correctAnswer": "Elastic Potential -> Kinetic -> Gravitational Potential -> Kinetic", "explanation": "The bent board (elastic potential) launches them up (kinetic), which becomes height (gravitational potential), which then becomes motion as they fall (kinetic)." },
+            { id: 'e3q10', question: "You drop a clay ball and a rubber ball of the same mass from the same height. The rubber ball bounces but the clay ball does not. Why?", options: ["The clay ball is heavier", "The clay converts kinetic energy into heat and sound on impact", "The rubber ball creates its own energy"], correctAnswer: "The clay converts kinetic energy into heat and sound on impact", explanation: "The clay deforms and absorbs the energy, converting it to heat. The rubber ball is elastic and efficiently converts kinetic energy back into potential and kinetic energy for the bounce.", image: null },
+            { id: 'e3q11', "question": "Which of these devices does NOT have a main energy conversion to kinetic energy?", "options": ["Blender", "Washing machine", "Kettle"], "correctAnswer": "Kettle", "explanation": "A blender and washing machine are designed to move things. A kettle is designed only to convert electrical energy into heat to boil water." },
+            { id: 'e3q12', question: "A solar powered street lamp charges during the day and lights up at night. The full energy chain is:", options: ["Light -> Chemical -> Electrical -> Light", "Light -> Electrical -> Chemical -> Electrical -> Light", "Light -> Heat -> Electrical -> Light"], correctAnswer: "Light -> Electrical -> Chemical -> Electrical -> Light", explanation: "The solar cell (light->electrical) charges the battery (electrical->chemical). At night, the battery (chemical->electrical) powers the lamp (electrical->light).", image: null },
+            { id: 'e3q13', question: "Why does a piece of metal feel colder than a piece of wood at the same room temperature?", options: ["The metal is actually colder", "The metal conducts heat away from your hand faster", "The wood produces its own heat"], correctAnswer: "The metal conducts heat away from your hand faster", explanation: "It's about heat transfer, not temperature. Metal is a good conductor, so it quickly draws heat (energy) from your hand, making it feel cold. Wood is an insulator.", image: null },
+            { id: 'e3q14', "question": "When you digest food, chemical energy is released. What is this energy used for?", "options": ["Only for movement", "Only for keeping warm", "For movement, warmth, and all other life processes"], "correctAnswer": "For movement, warmth, and all other life processes", "explanation": "The chemical energy from food powers everything your body does, from thinking and breathing to running and growing." },
+            { id: 'e3q15', question: "A satellite in orbit has both kinetic energy and gravitational potential energy. Why?", options: ["It is moving and it is at a great height", "It is powered by the Sun", "It is very large"], correctAnswer: "It is moving and it is at a great height", explanation: "It has kinetic energy because of its high speed, and it has gravitational potential energy because of its altitude above Earth.", image: null },
+            { id: 'e3q16', question: "If you shout in a large empty hall, you hear an echo. An echo is an example of sound energy being ___.", options: ["Absorbed", "Reflected", "Converted"], correctAnswer: "Reflected", explanation: "The sound waves travel, hit a surface like a wall, and bounce back to your ears. It's a reflection of energy, not a conversion.", image: null },
+            { id: 'e3q17', question: "A power station burns biomass (wood chips) to generate electricity. This is considered more 'renewable' than coal because...", options: ["Wood burns hotter than coal", "The energy ultimately comes from the sun via modern plants", "It produces no smoke"], correctAnswer: "The energy ultimately comes from the sun via modern plants", explanation: "The energy in biomass is from recent photosynthesis (Sun -> Plant). New plants can be grown, making it a renewable cycle, unlike fossil fuels which took millions of years to form.", image: null },
+            { id: 'e3q18', "question": "A powerful speaker can make a candle flame flicker. This shows that sound energy can be converted into ___.", "options": ["Light energy", "Heat energy", "Kinetic energy"], "correctAnswer": "Kinetic energy", "explanation": "The vibrations of the sound waves (a form of kinetic energy) are strong enough to move the air and cause the flame to move (kinetic energy)." },
+            { id: 'e3q19', question: "Which statement best explains why no machine is 100% efficient?", options: ["Machines are poorly designed", "Some energy is always converted into unwanted heat due to friction", "The energy gets used up and disappears"], correctAnswer: "Some energy is always converted into unwanted heat due to friction", explanation: "According to the Law of Conservation of Energy, energy doesn't disappear, but it's impossible to avoid some being converted to non-useful forms like heat and sound.", image: null },
+            { id: 'e3q20', question: "When a person speaks into a microphone, the diaphragm inside vibrates. This is the first step of converting sound energy into...?", options: ["Electrical energy", "Light energy", "Heat energy"], correctAnswer: "Electrical energy", explanation: "The microphone's job is to act as a transducer, converting the kinetic energy of the sound waves into an electrical signal for processing or transmission.", image: null }
+        ]
+    };
+
+    // --- State Variables ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    // --- Sound Synthesis (Tone.js) ---
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    // --- Confetti ---
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    // --- DOM Elements ---
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionImageEl = document.getElementById('questionImage');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    // --- Event Listeners ---
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    // --- Utility Functions ---
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    // --- Core Application Logic ---
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `Start ${setName}`;
+                button.className = `action-button w-full py-3 px-6 bg-teal-500 hover:bg-teal-600 text-white mb-3 last:mb-0`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : 'Learner';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        questionImageEl.classList.add('hidden'); questionImageEl.src = '';
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700 text-base md:text-lg';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.textContent = questionData.question;
+        if (questionData.image) {
+            questionImageEl.src = questionData.image;
+            questionImageEl.classList.remove('hidden');
+        }
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = '';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            feedbackText.textContent = 'Correct!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 text-base md:text-lg shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            if (questionImageEl.src) questionImageEl.classList.add('hidden'); 
+            questionText.classList.add('hidden'); 
+            
+            const explanation = questionData.explanation || "No explanation available.";
+            feedbackText.innerHTML = `
+                <div>Correct Answer: <span class="font-bold">${correctAnswer}</span></div>
+                <div class="explanation-box">${explanation}</div>
+                <div class="prompt-guidance">Click the correct answer (green) to continue.</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white text-base md:text-lg';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 text-base md:text-lg shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 text-base md:text-lg forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? 'Review Complete!' : `${currentSetData.setName || 'Session'} Complete!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}s`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "Perfect score! You are an energy expert!";
+        else if (percentage >= 70) encouragementTextEl.textContent = "Excellent work! Your understanding of energy is strong.";
+        else encouragementTextEl.textContent = "Good job! Review the incorrect answers to strengthen your knowledge.";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>Q:</b> ${item.questionData.question}<br/><b>Your:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>Correct:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Science' }) // Set subject to "Science"
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (Redo)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (Redo)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
