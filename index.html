@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PSLE Revision Launchpad</title>
+    <title>PSLE Subject Command Center</title>
     
     <!-- Google Fonts for a fun, modern look -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,13 +16,17 @@
     <style>
         /* --- General Styling --- */
         :root {
-            --primary-color: #4a90e2; /* Blue */
-            --secondary-color: #50e3c2; /* Teal */
             --background-color: #1a202c;
             --card-background: #2d3748;
             --text-color: #e2e8f0;
             --header-font: 'Luckiest Guy', cursive;
             --body-font: 'Poppins', sans-serif;
+            
+            /* Subject Colors */
+            --english-color: #4a90e2; /* Blue */
+            --chinese-color: #d0021b; /* Red */
+            --math-color: #f5a623;    /* Orange */
+            --science-color: #50e3c2; /* Teal */
         }
 
         * {
@@ -46,62 +50,43 @@
             padding: 20px;
         }
 
-        /* --- Main Header --- */
-        .main-header {
+        /* --- Header --- */
+        header {
             text-align: center;
             padding: 40px 20px;
             animation: fadeInDown 1s ease-out;
         }
 
-        .main-header h1 {
+        header h1 {
             font-family: var(--header-font);
             font-size: 3.5rem;
-            color: var(--secondary-color);
+            color: #fff;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
             letter-spacing: 2px;
         }
 
-        .main-header h1 i {
+        header h1 i {
             margin-right: 15px;
-            transform: rotate(-15deg);
+            color: var(--science-color);
         }
 
-        .main-header p {
+        header p {
             font-size: 1.2rem;
             color: #a0aec0;
             margin-top: 10px;
         }
         
-        /* --- Subject Section Styling --- */
+        /* --- Subject Section --- */
         .subject-section {
-            background: var(--card-background);
-            border-radius: 16px;
-            padding: 30px;
-            margin-bottom: 40px;
-            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
-            animation: popIn 0.5s ease-out forwards;
-            opacity: 0; /* Initially hidden for animation */
+            margin-bottom: 50px;
         }
-
-        /* Staggered animation for sections */
-        .subject-section:nth-of-type(1) { animation-delay: 0.2s; }
-        .subject-section:nth-of-type(2) { animation-delay: 0.4s; }
-        .subject-section:nth-of-type(3) { animation-delay: 0.6s; }
-        .subject-section:nth-of-type(4) { animation-delay: 0.8s; }
 
         .subject-header {
             display: flex;
             align-items: center;
-            color: var(--primary-color);
-            border-bottom: 2px solid #4a5568;
-            padding-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid var(--card-background);
             margin-bottom: 25px;
-        }
-
-        .subject-header i {
-            font-size: 2.5rem;
-            margin-right: 20px;
-            color: var(--secondary-color);
         }
 
         .subject-header h2 {
@@ -110,49 +95,56 @@
             letter-spacing: 1px;
         }
 
+        .subject-header i {
+            font-size: 2.2rem;
+            margin-right: 15px;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+        }
+
+        /* Applying subject colors */
+        #english .subject-header h2, #english .subject-header i { color: var(--english-color); }
+        #chinese .subject-header h2, #chinese .subject-header i { color: var(--chinese-color); }
+        #math .subject-header h2,    #math .subject-header i { color: var(--math-color); }
+        #science .subject-header h2, #science .subject-header i { color: var(--science-color); }
+        
         /* --- Link Grid --- */
         .link-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 20px;
         }
 
         .link-button {
-            background: #1a202c;
-            border: 1px solid #4a5568;
-            border-radius: 10px;
-            padding: 15px;
+            background: var(--card-background);
+            border-left: 5px solid; /* Placeholder, color set below */
+            border-radius: 8px;
+            padding: 20px;
             text-decoration: none;
             color: var(--text-color);
             font-weight: 600;
+            font-size: 0.95rem;
             display: flex;
             align-items: center;
             transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            animation: popIn 0.5s ease-out forwards;
+            opacity: 0; /* Initially hidden for animation */
         }
+        
+        /* Staggered animation for buttons */
+        .link-button { animation-delay: calc(var(--order) * 50ms); }
 
         .link-button:hover {
-            transform: translateY(-5px);
+            transform: translateY(-5px) scale(1.03);
             box-shadow: 0 8px 15px rgba(0, 0, 0, 0.4);
             background-color: #4a5568;
-            border-color: var(--secondary-color);
         }
-        
-        .link-button i {
-            font-size: 1.2rem;
-            margin-right: 12px;
-            width: 20px;
-            text-align: center;
-            color: var(--primary-color);
-        }
-        
-        /* --- Placeholder Styling --- */
-        .placeholder-text {
-            color: #a0aec0;
-            text-align: center;
-            padding: 20px;
-            font-style: italic;
-            font-size: 1.1rem;
-        }
+
+        /* Applying border colors based on section */
+        #english .link-button { border-color: var(--english-color); }
+        #chinese .link-button { border-color: var(--chinese-color); }
+        #math .link-button { border-color: var(--math-color); }
+        #science .link-button { border-color: var(--science-color); }
 
         /* --- Animations --- */
         @keyframes fadeInDown {
@@ -161,89 +153,98 @@
         }
 
         @keyframes popIn {
-            from { opacity: 0; transform: scale(0.9); }
+            from { opacity: 0; transform: scale(0.5); }
             to { opacity: 1; transform: scale(1); }
         }
 
-        /* --- Media Queries --- */
+        /* --- Media Queries for Responsiveness --- */
         @media (max-width: 768px) {
-            .main-header h1 { font-size: 2.5rem; }
+            header h1 { font-size: 2.8rem; }
+            header p { font-size: 1.1rem; }
             .subject-header h2 { font-size: 2rem; }
-            .subject-header i { font-size: 2rem; }
+            .subject-header i { font-size: 1.8rem; }
+        }
+        @media (max-width: 480px) {
             .link-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 2.2rem; }
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <header class="main-header">
-            <h1><i class="fa-solid fa-rocket"></i>PSLE Launchpad</h1>
-            <p>Select your subject and module to begin your revision mission!</p>
+        <header>
+            <h1><i class="fa-solid fa-star-shooting"></i>PSLE Command Center</h1>
+            <p>Select your subject and deploy to the learning zone!</p>
         </header>
 
         <main>
-            <!-- English Section -->
-            <section class="subject-section">
+            <!-- ENGLISH SECTION -->
+            <section id="english" class="subject-section">
                 <div class="subject-header">
-                    <i class="fa-solid fa-book-open"></i>
+                    <i class="fa-solid fa-book-open-reader"></i>
                     <h2>English</h2>
                 </div>
                 <div class="link-grid">
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_ChallengingVocabs.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-star"></i> Challenging Vocabs</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_CommonMistakes.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-xmark"></i> Common Mistakes</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_ErrorEditing.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-pen-to-square"></i> Error Editing</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Idioms1.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-lightbulb"></i> Idioms</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_SentenceTransformation.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-shuffle"></i> Sentence Transformation</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Synthesis&Grammar.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-atom"></i> Synthesis & Grammar</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Synthesis&Grammar2.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-atom"></i> Synthesis & Grammar 2</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_TransformationTechniques.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-wand-magic-sparkles"></i> Transformation Techniques</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_VocabularyBuilder.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-book-open-reader"></i> Vocabulary Builder</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_grammar.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-spell-check"></i> Grammar</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/English_synthesis.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-puzzle-piece"></i> Synthesis</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_ChallengingVocabs.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 1">Challenging Vocabs</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_CommonMistakes.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 2">Common Mistakes</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_ErrorEditing.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 3">Error Editing</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Idioms1.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 4">Idioms</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_SentenceTransformation.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 5">Sentence Transformation</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Synthesis&Grammar.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 6">Synthesis & Grammar 1</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_Synthesis&Grammar2.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 7">Synthesis & Grammar 2</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_TransformationTechniques.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 8">Transformation Techniques</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_VocabularyBuilder.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 9">Vocabulary Builder</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_grammar.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 10">Grammar</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/English_synthesis.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 11">Synthesis</a>
                 </div>
             </section>
 
-            <!-- Science Section -->
-            <section class="subject-section">
+            <!-- CHINESE SECTION -->
+            <section id="chinese" class="subject-section">
+                <div class="subject-header">
+                    <i class="fa-solid fa-language"></i>
+                    <h2>Chinese</h2>
+                </div>
+                <div class="link-grid">
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Chinese_6A.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 1">Chinese 6A</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Chinese_6A_v2.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 2">Chinese 6A v2</a>
+                </div>
+            </section>
+
+            <!-- MATH SECTION -->
+            <section id="math" class="subject-section">
+                <div class="subject-header">
+                    <i class="fa-solid fa-calculator"></i>
+                    <h2>Math</h2>
+                </div>
+                <div class="link-grid">
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Math_CoreConcepts.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 1">Core Concepts</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Math_FractionsDecimals&Percentage.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 2">Fractions, Decimals & Percentage</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Math_algebra.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 3">Algebra</a>
+                </div>
+            </section>
+
+            <!-- SCIENCE SECTION -->
+            <section id="science" class="subject-section">
                 <div class="subject-header">
                     <i class="fa-solid fa-flask-vial"></i>
                     <h2>Science</h2>
                 </div>
                 <div class="link-grid">
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_CyclesMatters.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-recycle"></i> Cycles: Matters</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Cycles_Plants&Animals.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-seedling"></i> Cycles: Plants & Animals</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Diversity.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-dna"></i> Diversity</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_ElectricalSystems.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-bolt"></i> Electrical Systems</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_EnergyConversion.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-sun"></i> Energy Conversion</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_EnergyForms&Uses.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-lightbulb"></i> Energy Forms & Uses</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_HumanSystems.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-heart-pulse"></i> Human Systems</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_InteractionEnvironment.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-earth-asia"></i> Interaction with Environment</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_InteractionofForces.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-magnet"></i> Interaction of Forces</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_PlantSystems.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-leaf"></i> Plant Systems</a>
-                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Systems&Cells.html" target="_blank" rel="noopener noreferrer" class="link-button"><i class="fa-solid fa-microscope"></i> Systems & Cells</a>
-                </div>
-            </section>
-
-            <!-- Math Section -->
-            <section class="subject-section">
-                <div class="subject-header">
-                    <i class="fa-solid fa-calculator"></i>
-                    <h2>Math</h2>
-                </div>
-                <div class="placeholder-text">
-                    <p>New math modules are being calculated... Coming Soon!</p>
-                </div>
-            </section>
-
-            <!-- Chinese Section -->
-            <section class="subject-section">
-                <div class="subject-header">
-                     <i class="fa-solid fa-language"></i>
-                    <h2>Chinese</h2>
-                </div>
-                <div class="placeholder-text">
-                    <p>New Chinese modules are on their way... Coming Soon!</p>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_ChallengingQs_v1.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 1">Challenging Qs v1</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_ChallengingQuestions.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 2">Challenging Questions</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_CyclesMatters.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 3">Cycles & Matters</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Cycles_Plants&Animals.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 4">Cycles: Plants & Animals</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Diversity.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 5">Diversity</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_ElectricalSystems.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 6">Electrical Systems</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_EnergyConversion.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 7">Energy Conversion</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_EnergyForms&Uses.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 8">Energy Forms & Uses</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_HumanSystems.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 9">Human Systems</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_InteractionEnvironment.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 10">Interaction of Environment</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_InteractionofForces.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 11">Interaction of Forces</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_PlantSystems.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 12">Plant Systems</a>
+                    <a href="https://gittyhub2025.github.io/PSLErevision/Science_Systems&Cells.html" target="_blank" rel="noopener noreferrer" class="link-button" style="--order: 13">Systems & Cells</a>
                 </div>
             </section>
         </main>
