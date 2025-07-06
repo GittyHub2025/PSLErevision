@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PSLE 华文闪卡 (PSLE Chinese Flashcards)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); }
+        }
+        .shake { animation: shake 0.5s ease-in-out; }
+
+        .correct-state-static {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+        }
+        .correct-state-static #questionText { display: none !important; }
+        .correct-state-static #feedbackText,
+        .correct-state-static #feedbackIconContainer { color: white !important; }
+
+        .incorrect-state {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #b91c1c !important; /* red-700 */
+        }
+        .incorrect-state #questionText { display: none !important; }
+        .incorrect-state #feedbackText,
+        .incorrect-state #feedbackIconContainer { color: white !important; }
+
+        .annotated-sentence-container {
+            font-size: 1.5rem;
+            font-weight: 600;
+            line-height: 2.5;
+            margin-bottom: 1rem;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.15);
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        .word-anno {
+            display: inline-block;
+            text-align: center;
+            margin: 0 0.25rem;
+            padding: 0 0.1rem;
+        }
+        .word-anno .pinyin {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 400;
+            color: #fdf4ff; /* Light purple for pinyin */
+        }
+        .english-explanation {
+            font-style: italic;
+            margin-top: 1rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: white;
+            padding: 0.5rem;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 0.375rem;
+        }
+        .explanation-box {
+            font-size: 0.9rem;
+            display: block;
+            margin-top: 0.5rem;
+            font-weight: normal;
+            background-color: rgba(0, 0, 0, 0.1);
+            padding: 0.5rem; border-radius: 0.375rem;
+        }
+        .prompt-guidance {
+             font-size: 0.875rem; display: block; margin-top: 1rem; font-weight: bold;
+        }
+
+        .choice-button, .action-button {
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-radius: 0.5rem; font-weight: 600;
+            padding: 0.75rem 0.5rem; text-align: center;
+            border: 1px solid transparent;
+        }
+        .choice-button:hover:not(:disabled), .action-button:hover {
+            transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        .choice-button:active:not(:disabled), .action-button:active {
+            transform: translateY(0px); box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .choice-button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+        .choice-button.forced-disabled-look { opacity: 0.5; }
+        .choice-button:disabled:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+        .clickable-card { cursor: pointer; }
+        #progressBarFill { transition: width 0.3s ease-out; }
+        #confettiCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 0.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+
+        .race-track-container { position: relative; width: 100%; height: 30px; margin-top: 20px; margin-bottom: 20px; z-index: 1; }
+        .race-track { position: absolute; bottom: 0; left: 0; width: calc(100% - 30px); height: 10px; background-color: #d1d5db; border-radius: 5px; z-index: 2; }
+        .race-track-fill { position: absolute; bottom: 0; left: 0; height: 10px; background-color: #3b82f6; border-radius: 5px; width: 0%; z-index: 3; transition: width 1.5s ease-out; }
+        .rocket { position: absolute; bottom: -8px; left: 0; font-size: 36px; transform: translateX(-50%); z-index: 10; transition: left 1.5s ease-out; }
+        .checkered-flag { position: absolute; bottom: -8px; right: 0; font-size: 24px; transform: translateX(50%); z-index: 10; }
+
+        #questionText { word-break: break-word; hyphens: auto; }
+        .choice-button { white-space: normal; word-break: break-word; line-height: 1.4; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+        
+        #questionText { font-size: 1.75rem; }
+        @media (min-width: 768px) { #questionText { font-size: 2rem; } }
+        .choice-button { font-size: 1.125rem; }
+        @media (min-width: 768px) { .choice-button { font-size: 1.25rem; } }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-fuchsia-100 via-purple-100 to-violet-100 min-h-screen flex items-center justify-center p-4">
+
+    <div id="appContainer" class="w-full max-w-md mx-auto">
+
+        <!-- Name Input Modal -->
+         <div id="nameModal" class="modal">
+             <div class="modal-content text-center">
+                 <h2 class="text-xl md:text-2xl font-semibold mb-4 text-purple-700">欢迎，华文学习者！</h2>
+                 <p class="text-slate-600 mb-4">请输入你的名字，开始你的PSLE华文复习之旅。</p>
+                 <input type="text" id="userNameInput" placeholder="你的名字" class="w-full p-2 border border-slate-300 rounded mb-4 focus:ring-purple-500 focus:border-purple-500 text-center text-lg">
+                 <button onclick="saveUserName()" class="action-button bg-purple-500 hover:bg-purple-600 text-white w-full py-3 px-6 text-lg">开始学习！</button>
+             </div>
+         </div>
+
+        <!-- Set Selection Screen -->
+        <div id="setSelectionScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-purple-800 mb-2">PSLE 华文练习</h1>
+            <p class="text-slate-600 mb-8">请选择一个题组来巩固你的知识！</p>
+            <div id="setButtonsContainer" class="grid grid-cols-1 gap-4"></div>
+        </div>
+
+        <!-- Flashcard Screen -->
+        <div id="flashcardScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-slate-600">进度</span>
+                    <span id="progressText" class="text-sm font-medium text-purple-700">0 / 0</span> </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5">
+                    <div id="progressBarFill" class="bg-purple-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="flashcard" class="bg-white border border-slate-300 rounded-lg p-6 mb-6 text-center min-h-[200px] flex flex-col items-center justify-center transition-colors duration-300">
+                 <div id="flashcardContent" class="w-full flex flex-col items-center justify-center">
+                     <div id="feedbackIconContainer" class="hidden text-7xl md:text-8xl mb-2"></div>
+                     <p id="questionText" class="font-semibold text-slate-800"></p>
+                     <div id="feedbackText" class="mt-2 text-base md:text-lg font-semibold"></div>
+                     <p id="continueText" class="mt-4 text-sm text-slate-500 hidden">点击卡片继续...</p>
+                 </div>
+            </div>
+            <div id="answerChoices" class="grid grid-cols-1 gap-3 md:gap-4">
+                <button id="choice1" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700"></button>
+                <button id="choice2" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700"></button>
+                <button id="choice3" class="choice-button bg-slate-100 hover:bg-slate-200 text-slate-700"></button>
+            </div>
+             <button onclick="showSetSelection()" class="action-button mt-6 bg-slate-500 hover:bg-slate-600 text-white w-full text-sm py-3 px-6">返回选题</button>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg text-center">
+            <h2 id="resultsHeading" class="text-2xl md:text-3xl font-bold text-purple-700 mb-4"></h2>
+            <div class="bg-emerald-500 text-white p-4 rounded-lg mb-6">
+                <p class="text-lg md:text-xl font-semibold mb-1">你的分数:</p>
+                <p id="scoreDisplay" class="text-4xl md:text-5xl font-bold italic"></p>
+            </div>
+            <div class="race-track-container">
+                <div class="race-track"></div>
+                <div id="raceTrackFill" class="race-track-fill bg-purple-500"></div>
+                <span id="rocketEl" class="rocket">🚀</span>
+                <span id="checkeredFlag" class="checkered-flag">🏁</span>
+            </div>
+            <p class="text-lg text-slate-700 mb-2">正确率: <span id="percentage" class="font-semibold"></span>%</p>
+            <p class="text-lg text-slate-700 mb-6">用时: <span id="timeTaken" class="font-semibold"></span> 秒</p>
+            <p id="encouragementText" class="text-lg text-purple-700 font-semibold mb-6"></p>
+            <div id="incorrectListContainer" class="mb-6 text-left">
+                <h3 class="text-xl font-semibold text-red-600 mb-3">复习错题:</h3>
+                <ul id="incorrectList" class="list-disc list-inside space-y-2 text-slate-600 text-sm"></ul>
+                 <p id="noIncorrectText" class="text-emerald-600 font-semibold hidden">太棒了，没有错题！</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="redoIncorrectButton" onclick="redoIncorrect()" class="action-button bg-orange-500 hover:bg-orange-600 text-white w-full py-3 px-6">重做错题</button>
+                <button onclick="showSetSelection()" class="action-button bg-purple-500 hover:bg-purple-600 text-white w-full py-3 px-6">选择其他题组</button>
+            </div>
+        </div>
+    </div>
+    <canvas id="confettiCanvas"></canvas>
+
+   <script>
+    // --- Configuration ---
+    const QUESTIONS_PER_SET = 20;
+    const AUTO_PROCEED_DELAY = 1800;
+    const USER_NAME_STORAGE_KEY = 'psleChineseApp_v5_newlist4';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwxl5mcaKKp3rXABfN6tMDqzUMCZ7eUTUt3LeoO8xFlwlSTuJqbOMY9vNxwSatucjec/exec';
+
+    // --- NEW FLASHCARD SETS (Based on the fourth word list) ---
+    const allFlashcardSets = {
+        "第十组：词语认读 (Easy)": [
+            { id: 'c10q1', question: "“雄伟” 的意思是什么？", options: ["高大壮丽", "矮小", "普通"], correctAnswer: "高大壮丽", explanation: "“雄伟”(xióng wěi) 形容山脉、建筑等气势宏大、壮丽。", annotatedSentence: `<div class="word-anno">雄伟<span class="pinyin">xióng wěi</span></div>`, englishExplanation: "English: '雄' (xióng) means grand/masculine and '伟' (wěi) means great. '雄伟' (xióng wěi) is used to describe something as majestic or magnificent, like a mountain or building." },
+            { id: 'c10q2', question: "“调整” 的拼音是什么？", options: ["tiáo zhěng", "diào zhěng", "tiǎo zhěng"], correctAnswer: "tiáo zhěng", explanation: "“调整”(tiáo zhěng) 指的是改变原来的情况，使之适应新的要求。", annotatedSentence: `<div class="word-anno">调整<span class="pinyin">tiáo zhěng</span></div>`, englishExplanation: "English: '调' (tiáo) means to adjust and '整' (zhěng) means to arrange. '调整' (tiáo zhěng) means 'to adjust'." },
+            { id: 'c10q3', question: "“苦恼” 的意思是什么？", options: ["痛苦烦恼", "开心快乐", "非常激动"], correctAnswer: "痛苦烦恼", explanation: "“苦恼”(kǔ nǎo) 是指心里痛苦、烦恼。", annotatedSentence: `<div class="word-anno">苦恼<span class="pinyin">kǔ nǎo</span></div>`, englishExplanation: "English: '苦' (kǔ) means bitter/hardship and '恼' (nǎo) means to be vexed. '苦恼' (kǔ nǎo) means distressed or tormented." },
+            { id: 'c10q4', question: "“私人” 的拼音是什么？", options: ["sī rén", "shī rén", "sì rén"], correctAnswer: "sī rén", explanation: "“私人”(sī rén) 指的是属于个人，不属于集体或国家的。", annotatedSentence: `<div class="word-anno">私人<span class="pinyin">sī rén</span></div>`, englishExplanation: "English: '私' (sī) means private and '人' (rén) means person. '私人' (sī rén) means 'private' or 'personal'." },
+            { id: 'c10q5', question: "“测试” 的意思是什么？", options: ["对性能或能力进行测量", "随便看看", "放弃"], correctAnswer: "对性能或能力进行测量", explanation: "“测试”(cè shì) 是指为了解性能或能力而进行的试验或测量。", annotatedSentence: `<div class="word-anno">测试<span class="pinyin">cè shì</span></div>`, englishExplanation: "English: '测' (cè) means to measure and '试' (shì) means to test. '测试' (cè shì) is the word for 'test' or 'quiz'." },
+            { id: 'c10q6', question: "“破碎” 的拼音是什么？", options: ["pò suì", "pò shuì", "bò suì"], correctAnswer: "pò suì", explanation: "“破碎”(pò suì) 是指完整的东西破成许多碎片。", annotatedSentence: `<div class="word-anno">破碎<span class="pinyin">pò suì</span></div>`, englishExplanation: "English: '破' (pò) means broken and '碎' (suì) means shattered. '破碎' (pò suì) means 'to be shattered into pieces'." },
+            { id: 'c10q7', question: "“关系” 的意思是什么？", options: ["人或事物之间的相互联系", "没有联系", "一种食物"], correctAnswer: "人或事物之间的相互联系", explanation: "“关系”(guān xì) 指的是人或事物之间存在着某种联系。", annotatedSentence: `<div class="word-anno">关系<span class="pinyin">guān xì</span></div>`, englishExplanation: "English: '关' (guān) and '系' (xì) both relate to connection or tying together. '关系' (guān xì) means 'relationship' or 'connection'." },
+            { id: 'c10q8', question: "“诚意” 的拼音是什么？", options: ["chéng yì", "chén yì", "chéng yí"], correctAnswer: "chéng yì", explanation: "“诚意”(chéng yì) 指的是真诚的心意。", annotatedSentence: `<div class="word-anno">诚意<span class="pinyin">chéng yì</span></div>`, englishExplanation: "English: '诚' (chéng) means sincere and '意' (yì) means intention. '诚意' (chéng yì) means 'sincerity' or 'good faith'." },
+            { id: 'c10q9', question: "“支柱” 的意思是什么？", options: ["起支撑作用的人或物", "一种动物", "一种情绪"], correctAnswer: "起支撑作用的人或物", explanation: "“支柱”(zhī zhù) 是指在建筑中起支撑作用的柱子，也比喻在团体或家庭中起主要支撑作用的人。", annotatedSentence: `<div class="word-anno">支柱<span class="pinyin">zhī zhù</span></div>`, englishExplanation: "English: '支' (zhī) means to support and '柱' (zhù) means pillar. '支柱' (zhī zhù) means 'pillar' or 'mainstay', both literally and figuratively." },
+            { id: 'c10q10', question: "“逐渐” 的拼音是什么？", options: ["zhú jiàn", "sú jiàn", "zhú jiān"], correctAnswer: "zhú jiàn", explanation: "“逐渐”(zhú jiàn) 表示程度或数量慢慢地增加或减少。", annotatedSentence: `<div class="word-anno">逐渐<span class="pinyin">zhú jiàn</span></div>`, englishExplanation: "English: '逐' (zhú) means step by step and '渐' (jiàn) means gradual. '逐渐' (zhú jiàn) is an adverb meaning 'gradually'." },
+            { id: 'c10q11', question: "“改造” 的意思是什么？", options: ["对旧事物进行修改，使之适合新的要求", "完全摧毁", "保持原样"], correctAnswer: "对旧事物进行修改，使之适合新的要求", explanation: "“改造”(gǎi zào) 指的是把旧的事物加以修改，使其变得更好或更适用。", annotatedSentence: `<div class="word-anno">改造<span class="pinyin">gǎi zào</span></div>`, englishExplanation: "English: '改' (gǎi) means to change and '造' (zào) means to make. '改造' (gǎi zào) means 'to reform', 'to remake', or 'to transform'." },
+            { id: 'c10q12', question: "“尺寸” 的拼音是什么？", options: ["chǐ cùn", "chǐ cǔn", "chí cùn"], correctAnswer: "chǐ cùn", explanation: "“尺寸”(chǐ cùn) 指的是物体的长短大小。", annotatedSentence: `<div class="word-anno">尺寸<span class="pinyin">chǐ cùn</span></div>`, englishExplanation: "English: '尺' (chǐ) and '寸' (cùn) are both traditional units of length. '尺寸' (chǐ cùn) is used to mean 'size' or 'dimensions'." },
+            { id: 'c10q13', question: "“计划” 的意思是什么？", options: ["预先制定的方案", "即兴的想法", "过去的记录"], correctAnswer: "预先制定的方案", explanation: "“计划”(jì huà) 是指在行动前预先制定的工作内容、步骤和方法。", annotatedSentence: `<div class="word-anno">计划<span class="pinyin">jì huà</span></div>`, englishExplanation: "English: '计' (jì) means to plan and '划' (huà) also means to plan. '计划' (jì huà) is the noun/verb for 'plan'." },
+            { id: 'c10q14', question: "“俱乐部” 的拼音是什么？", options: ["jù lè bù", "jū lè bù", "jù yuè bù"], correctAnswer: "jù lè bù", explanation: "“俱乐部”(jù lè bù) 是供人们进行社交、娱乐等活动的团体和场所。", annotatedSentence: `<div class="word-anno">俱乐部<span class="pinyin">jù lè bù</span></div>`, englishExplanation: "English: '俱乐部' (jù lè bù) is a loanword from English, meaning 'club'." },
+            { id: 'c10q15', question: "“打仗” 的意思是什么？", options: ["进行战争", "玩游戏", "商量事情"], correctAnswer: "进行战争", explanation: "“打仗”(dǎ zhàng) 是指军队之间进行战斗或战争。", annotatedSentence: `<div class="word-anno">打仗<span class="pinyin">dǎ zhàng</span></div>`, englishExplanation: "English: '打' (dǎ) means to fight and '仗' (zhàng) means battle. '打仗' (dǎ zhàng) means 'to fight a war' or 'to go to battle'." },
+            { id: 'c10q16', question: "“英俊” 的拼音是什么？", options: ["yīng jùn", "yīn jùn", "yīng qùn"], correctAnswer: "yīng jùn", explanation: "“英俊”(yīng jùn) 形容男子才智出众，容貌俊美。", annotatedSentence: `<div class="word-anno">英俊<span class="pinyin">yīng jùn</span></div>`, englishExplanation: "English: '英' (yīng) means outstanding and '俊' (jùn) means handsome. '英俊' (yīng jùn) is used to describe a man as 'handsome'." },
+            { id: 'c10q17', question: "“祝贺” 的意思是什么？", options: ["对喜事表示庆祝", "表示同情", "表示批评"], correctAnswer: "对喜事表示庆祝", explanation: "“祝贺”(zhù hè) 是指对别人遇到的喜事表示庆贺。", annotatedSentence: `<div class="word-anno">祝贺<span class="pinyin">zhù hè</span></div>`, englishExplanation: "English: '祝' (zhù) means to wish and '贺' (hè) means to congratulate. '祝贺' (zhù hè) means 'to congratulate'." },
+            { id: 'c10q18', question: "“种类” 的拼音是什么？", options: ["zhǒng lèi", "zǒng lèi", "chóng lèi"], correctAnswer: "zhǒng lèi", explanation: "“种类”(zhǒng lèi) 是指根据事物的性质、特征等分成的类别。", annotatedSentence: `<div class="word-anno">种类<span class="pinyin">zhǒng lèi</span></div>`, englishExplanation: "English: '种' (zhǒng) means type/seed and '类' (lèi) means category. '种类' (zhǒng lèi) means 'type', 'kind', or 'variety'." },
+            { id: 'c10q19', question: "“证据” 的意思是什么？", options: ["证明事实的根据", "个人的猜测", "虚构的故事"], correctAnswer: "证明事实的根据", explanation: "“证据”(zhèng jù) 是指可以用来证明案件或事情真实情况的材料。", annotatedSentence: `<div class="word-anno">证据<span class="pinyin">zhèng jù</span></div>`, englishExplanation: "English: '证' (zhèng) means to prove and '据' (jù) means evidence. '证据' (zhèng jù) is the word for 'evidence'." },
+            { id: 'c10q20', question: "“联合” 的拼音是什么？", options: ["lián hé", "lián gě", "lián hé"], correctAnswer: "lián hé", explanation: "“联合”(lián hé) 是指两个或两个以上的单位或个人为了共同的目的联系或结合在一起。", annotatedSentence: `<div class="word-anno">联合<span class="pinyin">lián hé</span></div>`, englishExplanation: "English: '联' (lián) means to connect and '合' (hé) means to combine. '联合' (lián hé) means 'to unite' or 'joint'." }
+        ],
+        "第十一组：词语应用 (Medium)": [
+            { id: 'c11q1', question: "他因为害怕而不敢说话，声音里充满了（ ）。", options: ["恐惧", "快乐", "平静"], correctAnswer: "恐惧", 
+              explanation: "“恐惧”(kǒng jù) 是指非常害怕。", 
+              annotatedSentence: `<span class="word-anno">声音里<span class="pinyin">shēng yīn lǐ</span></span><span class="word-anno">充满<span class="pinyin">chōng mǎn</span></span><span class="word-anno">了<span class="pinyin">le</span></span><span class="word-anno">恐惧<span class="pinyin">kǒng jù</span></span>`, 
+              englishExplanation: "English: '恐惧' (kǒng jù) means 'fear' or 'terror'. It is the most suitable word to describe the emotion of someone who is too scared to speak." },
+            { id: 'c11q2', question: "木块（ ）在水面上，而石头沉了下去。", options: ["漂浮", "沉没", "固定"], correctAnswer: "漂浮", 
+              explanation: "“漂浮”(piāo fú) 是指在液体表面浮动。", 
+              annotatedSentence: `<span class="word-anno">木块<span class="pinyin">mù kuài</span></span><span class="word-anno">漂浮<span class="pinyin">piāo fú</span></span><span class="word-anno">在<span class="pinyin">zài</span></span><span class="word-anno">水面<span class="pinyin">shuǐ miàn</span></span><span class="word-anno">上<span class="pinyin">shàng</span></span>`, 
+              englishExplanation: "English: '漂浮' (piāo fú) means 'to float'. It accurately describes what wood does in water, contrasting with the sinking stone." },
+            { id: 'c11q3', question: "这个问题太（ ）了，我一下子想不明白。", options: ["浅", "深", "容易"], correctAnswer: "深", 
+              explanation: "“深”(shēn) 在这里指问题、道理等不容易理解。", 
+              annotatedSentence: `<span class="word-anno">这个问题<span class="pinyin">zhè ge wèn tí</span></span><span class="word-anno">太<span class="pinyin">tài</span></span><span class="word-anno">深<span class="pinyin">shēn</span></span><span class="word-anno">了<span class="pinyin">le</span></span>`, 
+              englishExplanation: "English: '深' (shēn) can mean 'deep' literally, or 'profound/difficult' figuratively. Here it means the question is too profound to understand immediately. '浅' (qiǎn) means shallow." },
+            { id: 'c11q4', question: "他的演讲非常（ ）动人心，让在场的每个人都深受鼓舞。", options: ["激", "平静", "缓慢"], correctAnswer: "激", 
+              explanation: "“激动人心”(jī dòng rén xīn) 是指让人心情激动。", 
+              annotatedSentence: `<span class="word-anno">他的<span class="pinyin">tā de</span></span><span class="word-anno">演讲<span class="pinyin">yǎn jiǎng</span></span><span class="word-anno">非常<span class="pinyin">fēi cháng</span></span><span class="word-anno">激动人心<span class="pinyin">jī dòng rén xīn</span></span>`, 
+              englishExplanation: "English: '激动人心' (jī dòng rén xīn) is an idiom meaning 'stirring' or 'inspiring'. '激' (jī) means to stir up or arouse emotions." },
+            { id: 'c11q5', question: "这家工厂（ ）造的手机质量很好，很受欢迎。", options: ["制", "治", "质"], correctAnswer: "制", 
+              explanation: "“制造”(zhì zào) 指的是用机器或手把原材料加工成产品。", 
+              annotatedSentence: `<span class="word-anno">这家<span class="pinyin">zhè jiā</span></span><span class="word-anno">工厂<span class="pinyin">gōng chǎng</span></span><span class="word-anno">制造<span class="pinyin">zhì zào</span></span><span class="word-anno">的<span class="pinyin">de</span></span><span class="word-anno">手机<span class="pinyin">shǒu jī</span></span>`, 
+              englishExplanation: "English: The word for 'to manufacture' is '制造' (zhì zào). '制' means to make." },
+            { id: 'c11q6', question: "我（ ）经告诉过你，不要再犯同样的错误了。", options: ["曾", "增", "赠"], correctAnswer: "曾", 
+              explanation: "“曾经”(céng jīng) 表示过去发生过某件事。", 
+              annotatedSentence: `<span class="word-anno">我<span class="pinyin">wǒ</span></span><span class="word-anno">曾经<span class="pinyin">céng jīng</span></span><span class="word-anno">告诉<span class="pinyin">gào su</span></span><span class="word-anno">过<span class="pinyin">guo</span></span><span class="word-anno">你<span class="pinyin">nǐ</span></span>`, 
+              englishExplanation: "English: '曾经' (céng jīng) means 'once' or 'in the past'. It indicates a past action. '增' is to increase, '赠' is to gift." },
+            { id: 'c11q7', question: "为了节约开支，我们应该（ ）吃俭用。", options: ["省", "剩", "圣"], correctAnswer: "省", 
+              explanation: "“省吃俭用”(shěng chī jiǎn yòng) 是一个成语，指生活节俭，不乱花钱。", 
+              annotatedSentence: `<span class="word-anno">我们<span class="pinyin">wǒ men</span></span><span class="word-anno">应该<span class="pinyin">yīng gāi</span></span><span class="word-anno">省吃俭用<span class="pinyin">shěng chī jiǎn yòng</span></span>`, 
+              englishExplanation: "English: The idiom '省吃俭用' (shěng chī jiǎn yòng) means 'to be frugal' (literally, to save on eating and be frugal in spending). '省' (shěng) means to save." },
+            { id: 'c11q8', question: "妈妈在汤里（ ）了一点盐，味道就好多了。", options: ["添", "舔", "天"], correctAnswer: "添", 
+              explanation: "“添”(tiān) 的意思是增加。", 
+              annotatedSentence: `<span class="word-anno">妈妈<span class="pinyin">mā ma</span></span><span class="word-anno">在<span class="pinyin">zài</span></span><span class="word-anno">汤里<span class="pinyin">tāng lǐ</span></span><span class="word-anno">添<span class="pinyin">tiān</span></span><span class="word-anno">了<span class="pinyin">le</span></span><span class="word-anno">一点<span class="pinyin">yī diǎn</span></span><span class="word-anno">盐<span class="pinyin">yán</span></span>`, 
+              englishExplanation: "English: '添' (tiān) means 'to add'. '舔' (tiǎn) means to lick. '天' (tiān) is sky. Notice they have similar pinyin." },
+            { id: 'c11q9', question: "他性格孤僻，喜欢（ ）自一个人呆在角落里。", options: ["独", " dú", "dú"], correctAnswer: "独", 
+              explanation: "“独自”(dú zì) 是指自己一个人。", 
+              annotatedSentence: `<span class="word-anno">喜欢<span class="pinyin">xǐ huan</span></span><span class="word-anno">独自<span class="pinyin">dú zì</span></span><span class="word-anno">一人<span class="pinyin">yī rén</span></span><span class="word-anno">呆在<span class="pinyin">dāi zài</span></span><span class="word-anno">角落里<span class="pinyin">jiǎo luò lǐ</span></span>`, 
+              englishExplanation: "English: '独自' (dú zì) means 'alone' or 'by oneself'. It emphasizes solitude." },
+            { id: 'c11q10', question: "警察正在调查这个（ ）件，希望能尽快找到凶手。", options: ["案", "按", "岸"], correctAnswer: "案", 
+              explanation: "“案件”(àn jiàn) 是指涉及法律问题的事件。", 
+              annotatedSentence: `<span class="word-anno">警察<span class="pinyin">jǐng chá</span></span><span class="word-anno">正在<span class="pinyin">zhèng zài</span></span><span class="word-anno">调查<span class="pinyin">diào chá</span></span><span class="word-anno">这个<span class="pinyin">zhè ge</span></span><span class="word-anno">案件<span class="pinyin">àn jiàn</span></span>`, 
+              englishExplanation: "English: '案件' (àn jiàn) is the legal term for a 'case'. '案' itself can mean case. '按' is to press, '岸' is shore." },
+            { id: 'c11q11', question: "足球是一项（ ）体运动，需要队员们团结合作。", options: ["集", "jí", "jí"], correctAnswer: "集", 
+              explanation: "“集体”(jí tǐ) 指的是许多人组成的整体。", 
+              annotatedSentence: `<span class="word-anno">足球<span class="pinyin">zú qiú</span></span><span class="word-anno">是<span class="pinyin">shì</span></span><span class="word-anno">一项<span class="pinyin">yī xiàng</span></span><span class="word-anno">集体<span class="pinyin">jí tǐ</span></span><span class="word-anno">运动<span class="pinyin">yùn dòng</span></span>`, 
+              englishExplanation: "English: '集体' (jí tǐ) means 'collective' or 'group'. A team sport is a '集体运动' (jí tǐ yùn dòng)." },
+            { id: 'c11q12', question: "他因为一点小事就和同学争（ ），真不应该。", options: ["吵", "chǎo", "chāo"], correctAnswer: "吵", 
+              explanation: "“争吵”(zhēng chǎo) 是指因为意见不合而激烈地争论。", 
+              annotatedSentence: `<span class="word-anno">和<span class="pinyin">hé</span></span><span class="word-anno">同学<span class="pinyin">tóng xué</span></span><span class="word-anno">争吵<span class="pinyin">zhēng chǎo</span></span>`, 
+              englishExplanation: "English: '争吵' (zhēng chǎo) means 'to quarrel' or 'to argue'." },
+            { id: 'c11q13', question: "我们做事要（ ）思熟虑，不能鲁莽行事。", options: ["深", "琛", "shēn"], correctAnswer: "深", 
+              explanation: "“深思熟虑”(shēn sī shú lǜ) 是一个成语，指深入、周密地思考。", 
+              annotatedSentence: `<span class="word-anno">我们<span class="pinyin">wǒ men</span></span><span class="word-anno">做事<span class="pinyin">zuò shì</span></span><span class="word-anno">要<span class="pinyin">yào</span></span><span class="word-anno">深思熟虑<span class="pinyin">shēn sī shú lǜ</span></span>`, 
+              englishExplanation: "English: The idiom '深思熟虑' (shēn sī shú lǜ) means 'deep and careful consideration'. '深' (shēn) means 'deep'." },
+            { id: 'c11q14', question: "请你（ ）一下，这两种方法有什么不同？", options: ["说", "shuō", "shuì"], correctAnswer: "说", 
+              explanation: "“说一下”(shuō yī xià) 是指简单地说明。", 
+              annotatedSentence: `<span class="word-anno">请你<span class="pinyin">qǐng nǐ</span></span><span class="word-anno">说一下<span class="pinyin">shuō yī xià</span></span>`, 
+              englishExplanation: "English: '说一下' (shuō yī xià) is a common colloquial phrase meaning 'to explain briefly' or 'to say a little about'." },
+            { id: 'c11q15', question: "这个国家的（ ）济发展很快，人民生活水平不断提高。", options: ["经", "轻", "径"], correctAnswer: "经", 
+              explanation: "“经济”(jīng jì) 指的是一个国家或地区的国民经济。", 
+              annotatedSentence: `<span class="word-anno">这个<span class="pinyin">zhè ge</span></span><span class="word-anno">国家<span class="pinyin">guó jiā</span></span><span class="word-anno">的<span class="pinyin">de</span></span><span class="word-anno">经济<span class="pinyin">jīng jì</span></span><span class="word-anno">发展<span class="pinyin">fā zhǎn</span></span><span class="word-anno">很快<span class="pinyin">hěn kuài</span></span>`, 
+              englishExplanation: "English: '经济' (jīng jì) is the word for 'economy'. '轻' is light, '径' is path." },
+            { id: 'c11q16', question: "你不要再（ ）逗小弟弟了，他都快哭了。", options: ["挑", "tiāo", "tiǎo"], correctAnswer: "挑", 
+              explanation: "“挑逗”(tiǎo dòu) 是指引逗，招惹。", 
+              annotatedSentence: `<span class="word-anno">你<span class="pinyin">nǐ</span></span><span class="word-anno">不要<span class="pinyin">bú yào</span></span><span class="word-anno">再<span class="pinyin">zài</span></span><span class="word-anno">挑逗<span class="pinyin">tiǎo dòu</span></span><span class="word-anno">小弟弟<span class="pinyin">xiǎo dì di</span></span><span class="word-anno">了<span class="pinyin">le</span></span>`, 
+              englishExplanation: "English: '挑逗' (tiǎo dòu) means 'to tease' or 'to provoke'. The context of the little brother almost crying suggests teasing." },
+            { id: 'c11q17', question: "我们做事要有（ ）划，不能想到哪儿做到哪儿。", options: ["计", "jì", "jì"], correctAnswer: "计", 
+              explanation: "“计划”(jì huà) 指的是预先的安排和打算。", 
+              annotatedSentence: `<span class="word-anno">我们<span class="pinyin">wǒ men</span></span><span class="word-anno">做事<span class="pinyin">zuò shì</span></span><span class="word-anno">要有<span class="pinyin">yào yǒu</span></span><span class="word-anno">计划<span class="pinyin">jì huà</span></span>`, 
+              englishExplanation: "English: '计划' (jì huà) is the word for 'plan'. The sentence emphasizes the need for planning." },
+            { id: 'c11q18', question: "（ ）然下起了大雨，但我们还是决定继续前进。", options: ["虽", "suī", "suī"], correctAnswer: "虽", 
+              explanation: "“虽然”(suī rán) 是连词，表示转折。", 
+              annotatedSentence: `<span class="word-anno">虽然<span class="pinyin">suī rán</span></span><span class="word-anno">下起了<span class="pinyin">xià qǐ le</span></span><span class="word-anno">大雨<span class="pinyin">dà yǔ</span></span>`, 
+              englishExplanation: "English: The structure '虽然...但是...' (suī rán...dàn shì...) means 'Although...but...'. Here '虽然' introduces a contrasting situation." },
+            { id: 'c11q19', question: "这次的胜利，是大家（ ）同努力的结果。", options: ["共", "gòng", "gōng"], correctAnswer: "共", 
+              explanation: "“共同”(gòng tóng) 指的是大家一起。", 
+              annotatedSentence: `<span class="word-anno">是<span class="pinyin">shì</span></span><span class="word-anno">大家<span class="pinyin">dà jiā</span></span><span class="word-anno">共同<span class="pinyin">gòng tóng</span></span><span class="word-anno">努力<span class="pinyin">nǔ lì</span></span><span class="word-anno">的<span class="pinyin">de</span></span><span class="word-anno">结果<span class="pinyin">jié guǒ</span></span>`, 
+              englishExplanation: "English: '共同' (gòng tóng) means 'common' or 'joint'. It emphasizes that the result came from a shared effort." },
+            { id: 'c11q20', question: "他（ ）于在比赛中获得了第一名。", options: ["终", "zhōng", "zhǒng"], correctAnswer: "终", 
+              explanation: "“终于”(zhōng yú) 表示经过种种变化或等待之后出现的情况。", 
+              annotatedSentence: `<span class="word-anno">他<span class="pinyin">tā</span></span><span class="word-anno">终于<span class="pinyin">zhōng yú</span></span><span class="word-anno">在<span class="pinyin">zài</span></span><span class="word-anno">比赛中<span class="pinyin">bǐ sài zhōng</span></span><span class="word-anno">获得<span class="pinyin">huò dé</span></span><span class="word-anno">了<span class="pinyin">le</span></span><span class="word-anno">第一名<span class="pinyin">dì yī míng</span></span>`, 
+              englishExplanation: "English: '终于' (zhōng yú) means 'finally' or 'at last'. It's used to signify an outcome after a long wait or effort." }
+        ],
+        "第十二组：辨字与理解 (Hard)": [
+            { id: 'c12q1', question: "请把声（ ）调小一点，不要影响别人。", options: ["音", "意", "竟"], correctAnswer: "音", 
+              explanation: "“声音”(shēng yīn) 是指耳朵能听到的声响。“调”在这里读(tiáo)。", 
+              annotatedSentence: `<span class="word-anno">请<span class="pinyin">qǐng</span></span><span class="word-anno">把<span class="pinyin">bǎ</span></span><span class="word-anno">声音<span class="pinyin">shēng yīn</span></span><span class="word-anno">调<span class="pinyin">tiáo</span></span><span class="word-anno">小一点<span class="pinyin">xiǎo yī diǎn</span></span>`, 
+              englishExplanation: "English: The word for 'sound' or 'voice' is '声音' (shēng yīn). Notice the verb '调' is pronounced 'tiáo' (to adjust) here, not 'diào' (tone)." },
+            { id: 'c12q2', question: "这是我的（ ）人问题，不方便告诉你。", options: ["私", "厶", "和"], correctAnswer: "私", 
+              explanation: "“私人”(sī rén) 指的是个人的。“厶”是古字，现在很少用。", 
+              annotatedSentence: `<span class="word-anno">这是<span class="pinyin">zhè shì</span></span><span class="word-anno">我的<span class="pinyin">wǒ de</span></span><span class="word-anno">私人<span class="pinyin">sī rén</span></span><span class="word-anno">问题<span class="pinyin">wèn tí</span></span>`, 
+              englishExplanation: "English: '私人' (sī rén) means 'private'. The character '私' has the 'grain' radical (禾). '厶' is a different, much rarer character." },
+            { id: 'c12q3', question: "老师正在（ ）试我们的华文听写。", options: ["测", "侧", "则"], correctAnswer: "测", 
+              explanation: "“测试”(cè shì) 是指考查、试验。“侧”是旁边。“则”是规则。", 
+              annotatedSentence: `<span class="word-anno">老师<span class="pinyin">lǎo shī</span></span><span class="word-anno">正在<span class="pinyin">zhèng zài</span></span><span class="word-anno">测试<span class="pinyin">cè shì</span></span><span class="word-anno">我们<span class="pinyin">wǒ men</span></span>`, 
+              englishExplanation: "English: '测' (cè), with the 'water' radical (氵), means 'to measure/test'. '侧' (cè), with the 'person' radical (亻), means 'side'." },
+            { id: 'c12q4', question: "这件艺术品是用玻璃（ ）片拼接而成的。", options: ["碎", "卒", "翠"], correctAnswer: "碎", 
+              explanation: "“碎片”(suì piàn) 指的是零碎的小块。“卒”是士兵。“翠”是翡翠的颜色。", 
+              annotatedSentence: `<span class="word-anno">用<span class="pinyin">yòng</span></span><span class="word-anno">玻璃<span class="pinyin">bō li</span></span><span class="word-anno">碎片<span class="pinyin">suì piàn</span></span><span class="word-anno">拼接<span class="pinyin">pīn jiē</span></span><span class="word-anno">而成<span class="pinyin">ér chéng</span></span>`, 
+              englishExplanation: "English: '碎' (suì), with the 'stone' radical (石), means 'shattered'. '卒' (zú) means soldier. '翠' (cuì) is jade-green." },
+            { id: 'c12q5', question: "人与人之间的（ ）系需要用心去维护。", options: ["关", "美", "送"], correctAnswer: "关", 
+              explanation: "“关系”(guān xì) 指的是人与人之间的联系。", 
+              annotatedSentence: `<span class="word-anno">人与人<span class="pinyin">rén yǔ rén</span></span><span class="word-anno">之间<span class="pinyin">zhī jiān</span></span><span class="word-anno">的<span class="pinyin">de</span></span><span class="word-anno">关系<span class="pinyin">guān xì</span></span>`, 
+              englishExplanation: "English: The word for 'relationship' is '关系' (guān xì). '关' is the correct character here." },
+            { id: 'c12q6', question: "做人要（ ）实守信，不能说谎骗人。", options: ["诚", "城", "成"], correctAnswer: "诚", 
+              explanation: "“诚实”(chéng shí) 指的是真诚，不说谎。“城”是城市。“成”是成功。", 
+              annotatedSentence: `<span class="word-anno">做人<span class="pinyin">zuò rén</span></span><span class="word-anno">要<span class="pinyin">yào</span></span><span class="word-anno">诚实<span class="pinyin">chéng shí</span></span><span class="word-anno">守信<span class="pinyin">shǒu xìn</span></span>`, 
+              englishExplanation: "English: '诚' (chéng), with the 'speech' radical (讠), means 'sincere'. '城' (chéng), with the 'earth' radical (土), is 'city'." },
+            { id: 'c12q7', question: "这根（ ）子太细了，恐怕支撑不住。", options: ["柱", "住", "注"], correctAnswer: "柱", 
+              explanation: "“柱子”(zhù zi) 是起支撑作用的构件。“住”是居住。“注”是注意。", 
+              annotatedSentence: `<span class="word-anno">这根<span class="pinyin">zhè gēn</span></span><span class="word-anno">柱子<span class="pinyin">zhù zi</span></span><span class="word-anno">太<span class="pinyin">tài</span></span><span class="word-anno">细<span class="pinyin">xì</span></span><span class="word-anno">了<span class="pinyin">le</span></span>`, 
+              englishExplanation: "English: '柱' (zhù), with the 'wood' radical (木), is a 'pillar'. '住' (zhù) is to live, and '注' (zhù) is to pay attention." },
+            { id: 'c12q8', question: "水位正在逐（ ）上涨，大家要尽快撤离。", options: ["渐", "潜", "崭"], correctAnswer: "渐", 
+              explanation: "“逐渐”(zhú jiàn) 表示慢慢地变化。“潜”是潜水。“崭”是崭新。", 
+              annotatedSentence: `<span class="word-anno">水位<span class="pinyin">shuǐ wèi</span></span><span class="word-anno">正在<span class="pinyin">zhèng zài</span></span><span class="word-anno">逐渐<span class="pinyin">zhú jiàn</span></span><span class="word-anno">上涨<span class="pinyin">shàng zhǎng</span></span>`, 
+              englishExplanation: "English: '渐' (jiàn), with the 'water' radical (氵), means 'gradual'. '潜' (qián), also with water radical, means 'to dive'. '崭' (zhǎn) means brand new." },
+            { id: 'c12q9', question: "这家工厂专门（ ）造各种精密仪器。", options: ["制", "治", "致"], correctAnswer: "制", 
+              explanation: "“制造”(zhì zào) 指的是生产、制作。“治”是治理。“致”是导致。", 
+              annotatedSentence: `<span class="word-anno">专门<span class="pinyin">zhuān mén</span></span><span class="word-anno">制造<span class="pinyin">zhì zào</span></span><span class="word-anno">精密<span class="pinyin">jīng mì</span></span><span class="word-anno">仪器<span class="pinyin">yí qì</span></span>`, 
+              englishExplanation: "English: '制' (zhì), with the 'knife' radical (刂), means 'to make'. '治' (zhì), with the 'water' radical (氵), means 'to govern/cure'." },
+            { id: 'c12q10', question: "他俩身高相差无几，只有一（ ）之差。", options: ["寸", "对", "过"], correctAnswer: "寸", 
+              explanation: "“一寸之差”形容差别很小。", 
+              annotatedSentence: `<span class="word-anno">只有<span class="pinyin">zhǐ yǒu</span></span><span class="word-anno">一寸<span class="pinyin">yī cùn</span></span><span class="word-anno">之差<span class="pinyin">zhī chā</span></span>`, 
+              englishExplanation: "English: '寸' (cùn) is a unit of length (an inch). '一寸之差' is an expression for a very small difference." },
+            { id: 'c12q11', question: "这件事是我亲身（ ）历的，绝对真实。", options: ["经", "轻", "径"], correctAnswer: "经", 
+              explanation: "“经历”(jīng lì) 指的是亲身见过、做过或遭受过的事。“轻”是 light。“径”是 path。", 
+              annotatedSentence: `<span class="word-anno">我<span class="pinyin">wǒ</span></span><span class="word-anno">亲身<span class="pinyin">qīn shēn</span></span><span class="word-anno">经历<span class="pinyin">jīng lì</span></span><span class="word-anno">的<span class="pinyin">de</span></span>`, 
+              englishExplanation: "English: '经' (jīng), with the 'silk' radical (纟), is used in '经历' (jīng lì - to experience). '轻' (qīng), with the 'cart' radical (车), means light." },
+            { id: 'c12q12', question: "两国（ ）合发表声明，表示将加强合作。", options: ["联", "关", "耿"], correctAnswer: "联", 
+              explanation: "“联合”(lián hé) 是指结合在一起。“关”是关闭。“耿”是耿直。", 
+              annotatedSentence: `<span class="word-anno">两国<span class="pinyin">liǎng guó</span></span><span class="word-anno">联合<span class="pinyin">lián hé</span></span><span class="word-anno">发表<span class="pinyin">fā biǎo</span></span><span class="word-anno">声明<span class="pinyin">shēng míng</span></span>`, 
+              englishExplanation: "English: '联' (lián), with the 'ear' radical (耳), means 'to unite'. '关' (guān), with two 'silk' radicals on top, means 'to close'." },
+            { id: 'c12q13', question: "水（ ）太浅了，大船无法通过。", options: ["道", "到", "倒"], correctAnswer: "道", 
+              explanation: "“水道”(shuǐ dào) 是指水流的通道。", 
+              annotatedSentence: `<span class="word-anno">水道<span class="pinyin">shuǐ dào</span></span><span class="word-anno">太<span class="pinyin">tài</span></span><span class="word-anno">浅<span class="pinyin">qiǎn</span></span><span class="word-anno">了<span class="pinyin">le</span></span>`, 
+              englishExplanation: "English: '水道' (shuǐ dào) means 'waterway' or 'channel'. '浅' (qiǎn) means shallow. The characters look quite different." },
+            { id: 'c12q14', question: "为了（ ）加节日气氛，街上挂满了彩灯。", options: ["增", "曾", "赠"], correctAnswer: "增", 
+              explanation: "“增加”(zēng jiā) 是指在原有的基础上加多。“曾”是曾经。“赠”是赠送。", 
+              annotatedSentence: `<span class="word-anno">为了<span class="pinyin">wèi le</span></span><span class="word-anno">增加<span class="pinyin">zēng jiā</span></span><span class="word-anno">节日<span class="pinyin">jié rì</span></span><span class="word-anno">气氛<span class="pinyin">qì fēn</span></span>`, 
+              englishExplanation: "English: '增' (zēng), with the 'earth' radical (土), means 'to increase'. '曾' (céng), with a different top component, means 'once'." },
+            { id: 'c12q15', question: "这道菜（ ）别好吃，你一定要尝尝。", options: ["特", "持", "恃"], correctAnswer: "特", 
+              explanation: "“特别”(tè bié) 是指格外，与众不同。“持”是保持。“恃”是依赖。", 
+              annotatedSentence: `<span class="word-anno">这道菜<span class="pinyin">zhè dào cài</span></span><span class="word-anno">特别<span class="pinyin">tè bié</span></span><span class="word-anno">好吃<span class="pinyin">hǎo chī</span></span>`, 
+              englishExplanation: "English: '特' (tè), with the 'cow' radical (牛), means 'special'. '持' (chí), with the 'hand' radical (扌), means 'to hold'." },
+            { id: 'c12q16', question: "你今天的表（ ）很出色，值得表扬。", options: ["现", "观", "见"], correctAnswer: "现", 
+              explanation: "“表现”(biǎo xiàn) 指的是行为、作风等显露在外的样子。", 
+              annotatedSentence: `<span class="word-anno">你<span class="pinyin">nǐ</span></span><span class="word-anno">今天<span class="pinyin">jīn tiān</span></span><span class="word-anno">的<span class="pinyin">de</span></span><span class="word-anno">表现<span class="pinyin">biǎo xiàn</span></span><span class="word-anno">很<span class="pinyin">hěn</span></span><span class="word-anno">出色<span class="pinyin">chū sè</span></span>`, 
+              englishExplanation: "English: The word for 'performance' or 'behavior' is '表现' (biǎo xiàn). '现' (xiàn) means to appear." },
+            { id: 'c12q17', question: "我们要懂得反（ ），才能不断进步。", options: ["省", "看", "shěng"], correctAnswer: "省", 
+              explanation: "“反省”(fǎn xǐng) 指的是回想、检查自己的思想和行为。注意这里的“省”读(xǐng)。", 
+              annotatedSentence: `<span class="word-anno">要<span class="pinyin">yào</span></span><span class="word-anno">懂得<span class="pinyin">dǒng de</span></span><span class="word-anno">反省<span class="pinyin">fǎn xǐng</span></span>`, 
+              englishExplanation: "English: '省' has two pronunciations. Here, in '反省' (fǎn xǐng - to reflect upon oneself), it is pronounced 'xǐng'. When it means 'to save' (节省 jié shěng), it's pronounced 'shěng'." },
+            { id: 'c12q18', question: "这部电影的男主（ ）是一位著名的演员。", options: ["角", "脚", "觉"], correctAnswer: "角", 
+              explanation: "“主角”(zhǔ jué) 是指戏剧、电影等文艺作品中的主要角色。", 
+              annotatedSentence: `<span class="word-anno">男主角<span class="pinyin">nán zhǔ jué</span></span><span class="word-anno">是<span class="pinyin">shì</span></span><span class="word-anno">一位<span class="pinyin">yī wèi</span></span><span class="word-anno">著名<span class="pinyin">zhù míng</span></span><span class="word-anno">的<span class="pinyin">de</span></span><span class="word-anno">演员<span class="pinyin">yǎn yuán</span></span>`, 
+              englishExplanation: "English: '角' (jué) means 'role' or 'character' in a performance. '脚' (jiǎo) is foot. '觉' (jué/jiào) is to feel or sleep." },
+            { id: 'c12q19', question: "他俩是双胞胎，长得一（ ）一样。", options: ["模", "摸", "膜"], correctAnswer: "模", 
+              explanation: "“一模一样”(yī mú yī yàng) 是一个成语，形容完全相同。“摸”是用手接触。“膜”是薄膜。", 
+              annotatedSentence: `<span class="word-anno">长得<span class="pinyin">zhǎng de</span></span><span class="word-anno">一模一样<span class="pinyin">yī mú yī yàng</span></span>`, 
+              englishExplanation: "English: The idiom '一模一样' (yī mú yī yàng) means 'exactly the same'. '模' (mú) means model or pattern." },
+            { id: 'c12q20', question: "这把尺子长一（ ）。", options: ["尺", "呎", "chǐ"], correctAnswer: "尺", 
+              explanation: "“尺”(chǐ) 是长度单位。", 
+              annotatedSentence: `<span class="word-anno">这把<span class="pinyin">zhè bǎ</span></span><span class="word-anno">尺子<span class="pinyin">chǐ zi</span></span><span class="word-anno">长<span class="pinyin">cháng</span></span><span class="word-anno">一尺<span class="pinyin">yī chǐ</span></span>`, 
+              englishExplanation: "English: The character for the unit of length 'chi' (a Chinese foot) is '尺' (chǐ). '呎' is an obsolete character also for foot." }
+        ]
+    };
+
+    // --- State Variables, DOM Elements, and Core Logic ---
+    let currentSetData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let incorrectAnswers = [];
+    let startTime;
+    let endTime;
+    let isRedoing = false;
+    let proceedTimeoutId = null;
+    let isWaitingToProceed = false;
+    let userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+
+    const correctSound = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.05, release: 0.2 }, }).toDestination();
+    const incorrectSound = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 } }).toDestination();
+
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const myConfetti = confetti.create(confettiCanvas, { resize: true, useWorker: true });
+
+    const nameModal = document.getElementById('nameModal');
+    const userNameInput = document.getElementById('userNameInput');
+    const setSelectionScreen = document.getElementById('setSelectionScreen');
+    const setButtonsContainer = document.getElementById('setButtonsContainer');
+    const flashcardScreen = document.getElementById('flashcardScreen');
+    const resultsScreen = document.getElementById('resultsScreen');
+    const progressText = document.getElementById('progressText');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const flashcard = document.getElementById('flashcard');
+    const questionText = document.getElementById('questionText');
+    const feedbackText = document.getElementById('feedbackText');
+    const feedbackIconContainer = document.getElementById('feedbackIconContainer');
+    const continueText = document.getElementById('continueText');
+    const choiceButtons = [ document.getElementById('choice1'), document.getElementById('choice2'), document.getElementById('choice3') ];
+    const scoreDisplayEl = document.getElementById('scoreDisplay');
+    const percentageEl = document.getElementById('percentage');
+    const timeTakenEl = document.getElementById('timeTaken');
+    const incorrectListContainer = document.getElementById('incorrectListContainer');
+    const incorrectList = document.getElementById('incorrectList');
+    const noIncorrectText = document.getElementById('noIncorrectText');
+    const redoIncorrectButton = document.getElementById('redoIncorrectButton');
+    const encouragementTextEl = document.getElementById('encouragementText');
+    const resultsHeadingEl = document.getElementById('resultsHeading');
+    const raceTrackContainer = document.querySelector('#resultsScreen .race-track-container');
+    const raceTrackFillEl = document.getElementById('raceTrackFill');
+    const rocketEl = document.getElementById('rocketEl');
+
+    flashcard.addEventListener('click', () => {
+        if (isWaitingToProceed &&
+            !flashcard.classList.contains('incorrect-state') &&
+            (flashcard.classList.contains('correct-state-static') || flashcard.classList.contains('clickable-card'))) {
+            proceedToNext();
+        }
+    });
+    userNameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveUserName();
+        }
+    });
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    function populateStartButton() {
+        setButtonsContainer.innerHTML = '';
+        Object.keys(allFlashcardSets).forEach(setName => {
+            const set = allFlashcardSets[setName];
+            if (set.length >= QUESTIONS_PER_SET) {
+                const button = document.createElement('button');
+                button.textContent = `开始 ${setName}`;
+                button.className = `action-button w-full py-4 px-6 bg-purple-500 hover:bg-purple-600 text-white mb-3 last:mb-0 text-lg`; 
+                button.onclick = () => startFlashcardSession(set, setName);
+                setButtonsContainer.appendChild(button);
+            } else {
+                const errorP = document.createElement('p');
+                errorP.className = "text-red-500 text-sm";
+                errorP.textContent = `Error: The set "${setName}" does not have enough questions (${set.length} found, ${QUESTIONS_PER_SET} required).`;
+                setButtonsContainer.appendChild(errorP);
+            }
+        });
+    }
+
+    function saveUserName() {
+        const name = userNameInput.value.trim();
+        userName = name ? name : '学习者';
+        localStorage.setItem(USER_NAME_STORAGE_KEY, userName);
+        nameModal.style.display = 'none';
+        showSetSelection();
+    }
+
+    function startFlashcardSession(selectedSet, setName) {
+        Tone.start().catch(e => console.warn("Audio context could not start:", e));
+        let fullSetCopy = [...selectedSet]; 
+        shuffleArray(fullSetCopy);
+        currentSetData = fullSetCopy.slice(0, QUESTIONS_PER_SET); 
+        currentSetData.setName = setName; 
+        currentQuestionIndex = 0;
+        score = 0;
+        incorrectAnswers = [];
+        isRedoing = false;
+        setSelectionScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        updateProgress(); 
+        startTime = new Date();
+        displayQuestion();
+    }
+
+    function resetCardState() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); proceedTimeoutId = null; }
+        isWaitingToProceed = false;
+        flashcard.classList.remove('shake', 'correct-state-static', 'incorrect-state', 'clickable-card');
+        questionText.classList.remove('hidden');
+        feedbackText.innerHTML = '';
+        feedbackIconContainer.classList.add('hidden');
+        continueText.classList.add('hidden');
+        choiceButtons.forEach(btn => {
+            btn.className = 'choice-button bg-slate-100 hover:bg-slate-200 text-slate-700';
+        });
+    }
+
+    function displayQuestion() {
+        resetCardState();
+        if (currentQuestionIndex >= currentSetData.length) {
+            showResults();
+            return;
+        }
+        const questionData = currentSetData[currentQuestionIndex];
+        questionText.innerHTML = questionData.question.replace(/\n/g, '<br>');
+        let displayOptions = [...questionData.options];
+        shuffleArray(displayOptions);
+        choiceButtons.forEach((button, index) => {
+            if (displayOptions[index] !== undefined) {
+                button.textContent = displayOptions[index];
+                button.disabled = false;
+                button.dataset.answer = displayOptions[index];
+                button.onclick = () => checkAnswer(button);
+                button.style.display = 'flex';
+            } else {
+                button.style.display = 'none'; 
+            }
+        });
+    }
+
+    function updateProgress() {
+        const totalQuestions = currentSetData.length;
+        const completed = currentQuestionIndex;
+        const progressPercentage = totalQuestions > 0 ? (completed / totalQuestions) * 100 : 0;
+        progressText.textContent = `${completed} / ${totalQuestions}`;
+        progressBarFill.style.width = `${progressPercentage}%`;
+    }
+
+    function checkAnswer(button) {
+        Tone.start().catch(e => console.warn("Audio context failed:", e));
+        if (isWaitingToProceed && !flashcard.classList.contains('incorrect-state')) return;
+        const selectedAnswer = button.dataset.answer;
+        const questionData = currentSetData[currentQuestionIndex];
+        const correctAnswer = questionData.correctAnswer;
+        choiceButtons.forEach(btn => btn.disabled = true);
+
+        if (selectedAnswer === correctAnswer) {
+            if (!isRedoing) score++;
+            flashcard.classList.add('correct-state-static');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✓</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden');
+            feedbackText.textContent = '正确!';
+            myConfetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            correctSound.triggerAttackRelease("G5", "8n", Tone.now());
+            button.className = 'choice-button bg-emerald-600 text-white ring-2 ring-emerald-800 shadow-md';
+            isWaitingToProceed = true;
+            flashcard.classList.add('clickable-card');
+            continueText.classList.remove('hidden');
+            proceedTimeoutId = setTimeout(proceedToNext, AUTO_PROCEED_DELAY);
+            currentQuestionIndex++; 
+            updateProgress(); 
+        } else {
+            flashcard.classList.add('shake', 'incorrect-state');
+            feedbackIconContainer.innerHTML = '<span class="text-7xl md:text-8xl">✗</span>';
+            feedbackIconContainer.classList.remove('hidden');
+            questionText.classList.add('hidden'); 
+            
+            const annotatedSentenceHTML = (questionData.annotatedSentence || "").replace('（ ）', `<span class="word-anno" style="color:#facc15; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">${correctAnswer}<span class="pinyin"> </span></span>`);
+            const englishExplanation = questionData.englishExplanation || "";
+            const chineseExplanation = questionData.explanation || "没有解析。";
+            
+            feedbackText.innerHTML = `
+                <div class="annotated-sentence-container">${annotatedSentenceHTML}</div>
+                <div class="english-explanation">${englishExplanation}</div>
+                <div class="explanation-box"><b>中文解析:</b> ${chineseExplanation}</div>
+                <div class="prompt-guidance">点击绿色正确答案继续。</div>
+            `;
+
+            incorrectSound.triggerAttackRelease("C3", "8n");
+            if (!isRedoing) {
+                incorrectAnswers.push({ questionData: questionData, userAnswer: selectedAnswer });
+            }
+            isWaitingToProceed = false;
+            flashcard.classList.remove('clickable-card');
+            if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+            choiceButtons.forEach(btn => {
+                if (btn.dataset.answer === correctAnswer) {
+                    btn.className = 'choice-button bg-emerald-500 hover:bg-emerald-600 text-white';
+                    btn.disabled = false;
+                    btn.onclick = function() {
+                        currentQuestionIndex++; 
+                        updateProgress(); 
+                        proceedToNext();
+                    };
+                } else if (btn === button) {
+                    btn.className = 'choice-button bg-red-700 text-white ring-2 ring-red-900 shadow-md';
+                } else {
+                    btn.className = 'choice-button bg-slate-200 text-slate-500 forced-disabled-look';
+                }
+            });
+        }
+    }
+
+    function proceedToNext() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false;
+        displayQuestion();
+    }
+
+    function showResults() {
+        endTime = new Date();
+        const timeDiff = Math.round((endTime - startTime) / 1000);
+        const totalQuestions = currentSetData.length;
+        const currentScore = isRedoing ? (totalQuestions - incorrectAnswers.length) : score;
+        const percentage = totalQuestions > 0 ? Math.round((currentScore / totalQuestions) * 100) : 0;
+
+        resultsHeadingEl.textContent = isRedoing ? '错题复习完成！' : `“${currentSetData.setName || '练习'}”完成!`;
+        scoreDisplayEl.textContent = `${currentScore} / ${totalQuestions}`;
+        percentageEl.textContent = `${percentage}`;
+        timeTakenEl.textContent = `${timeDiff}`;
+
+        if (percentage === 100) encouragementTextEl.textContent = "太棒了，满分！你已经掌握了这个部分！";
+        else if (percentage >= 70) encouragementTextEl.textContent = "做得很好！继续努力，你非常出色。";
+        else encouragementTextEl.textContent = "不错！复习一下错题，可以让你更强大。";
+        
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+        
+        requestAnimationFrame(() => {
+            setTimeout(() => { 
+                const trackWidth = raceTrackContainer.offsetWidth;
+                const effectiveTrackWidth = trackWidth - rocketEl.offsetWidth; 
+                const finalRocketPosition = Math.max(0, (percentage / 100) * effectiveTrackWidth);
+                rocketEl.style.left = `${finalRocketPosition}px`;
+                raceTrackFillEl.style.width = `${finalRocketPosition}px`;
+            }, 100);
+        });
+
+        incorrectList.innerHTML = '';
+        if (incorrectAnswers.length > 0) {
+            incorrectListContainer.classList.remove('hidden'); noIncorrectText.classList.add('hidden');
+            incorrectAnswers.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<b>问题:</b> ${item.questionData.question.replace(/\n/g, ' ')}<br/><b>你的答案:</b> <span class="text-red-500">${item.userAnswer}</span><br/><b>正确答案:</b> <span class="text-emerald-600">${item.questionData.correctAnswer}</span>`;
+                incorrectList.appendChild(li);
+            });
+            redoIncorrectButton.classList.remove('hidden');
+            redoIncorrectButton.disabled = isRedoing || incorrectAnswers.length === 0;
+        } else {
+            incorrectListContainer.classList.add('hidden'); noIncorrectText.classList.remove('hidden');
+            redoIncorrectButton.classList.add('hidden');
+        }
+
+        sendResultsToGoogleSheet({
+            setName: currentSetData.setName || "Unknown Set", score: currentScore, totalQuestions: totalQuestions,
+            percentage: percentage, timeTaken: timeDiff,
+            incorrectAnswersJSON: JSON.stringify(incorrectAnswers.map(item => ({ q: item.questionData.question, u: item.userAnswer, c: item.questionData.correctAnswer }))),
+            name: userName, timestamp: new Date().toISOString() 
+        });
+
+        if (isRedoing) { incorrectAnswers = []; isRedoing = false; }
+    }
+
+    function sendResultsToGoogleSheet(data) {
+        fetch(APPS_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({payloadType: 'flashcardResults', ...data, subject: 'Chinese' })
+        }).catch(err => console.error("Failed to send results:", err));
+    }
+
+    function redoIncorrect() {
+        if (incorrectAnswers.length === 0) return;
+        const originalSetName = currentSetData.setName.replace(" (重做)", "");
+        currentSetData = incorrectAnswers.map(item => item.questionData);
+        currentSetData.setName = `${originalSetName} (重做)`;
+        currentQuestionIndex = 0;
+        incorrectAnswers = []; 
+        isRedoing = true;
+        resultsScreen.classList.add('hidden');
+        flashcardScreen.classList.remove('hidden');
+        startTime = new Date();
+        updateProgress(); 
+        displayQuestion();
+    }
+
+    function showSetSelection() {
+        if (proceedTimeoutId) { clearTimeout(proceedTimeoutId); }
+        isWaitingToProceed = false; isRedoing = false; 
+        nameModal.style.display = 'none';
+        flashcardScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        setSelectionScreen.classList.remove('hidden');
+        populateStartButton();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        userName = localStorage.getItem(USER_NAME_STORAGE_KEY) || '';
+        if (userName) {
+            showSetSelection(); 
+        } else {
+            nameModal.style.display = 'flex';
+            userNameInput.focus();
+        }
+    });
+</script>
+
+</body>
+</html>
